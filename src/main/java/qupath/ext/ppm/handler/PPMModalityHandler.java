@@ -287,35 +287,71 @@ public class PPMModalityHandler implements ModalityHandler {
      */
     @Override
     public List<ModalityMenuItem> getMenuContributions() {
-        return List.of(
-                new ModalityMenuItem(
-                        "polarizerCalibration",
-                        "Polarizer Calibration (PPM)...",
-                        "Calibrate the polarizer rotation stage for polarized light microscopy (PPM). "
-                                + "Determines the correct rotation angles for optimal birefringence imaging.",
-                        () -> qupath.ext.ppm.workflow.PolarizerCalibrationWorkflow.run()),
-                new ModalityMenuItem(
-                        "ppmSensitivityTest",
-                        "PPM Rotation Sensitivity Test...",
-                        "Test PPM rotation stage sensitivity by acquiring images at precise angles. "
-                                + "Analyzes the impact of angular deviations on image quality and birefringence calculations. "
-                                + "Provides comprehensive analysis reports for validation and optimization.",
-                        () -> qupath.ext.ppm.workflow.PPMSensitivityTestWorkflow.run()),
-                new ModalityMenuItem(
-                        "birefringenceOptimization",
-                        "PPM Birefringence Optimization...",
-                        "Find the optimal polarizer angle for maximum birefringence signal contrast. "
-                                + "Systematically tests angles by acquiring paired images (+theta, -theta) and "
-                                + "computing their difference. Results include optimal angles, signal metrics, and "
-                                + "visualization plots. Supports multiple exposure modes (interpolate, calibrate, fixed).",
-                        () -> qupath.ext.ppm.workflow.BirefringenceOptimizationWorkflow.run()),
-                new ModalityMenuItem(
-                        "sunburstCalibration",
-                        "PPM Reference Slide...",
-                        "Create a hue-to-angle calibration from a PPM reference slide with sunburst pattern. "
-                                + "Acquires an image of radial spokes and creates a linear regression mapping "
-                                + "hue values to orientation angles for use in PPM analysis.",
-                        () -> qupath.ext.ppm.workflow.SunburstCalibrationWorkflow.run()));
+        List<ModalityMenuItem> items = new ArrayList<>();
+
+        // Calibration workflows
+        items.add(new ModalityMenuItem(
+                "polarizerCalibration",
+                "Polarizer Calibration (PPM)...",
+                "Calibrate the polarizer rotation stage for polarized light microscopy (PPM). "
+                        + "Determines the correct rotation angles for optimal birefringence imaging.",
+                () -> qupath.ext.ppm.workflow.PolarizerCalibrationWorkflow.run()));
+        items.add(new ModalityMenuItem(
+                "ppmSensitivityTest",
+                "PPM Rotation Sensitivity Test...",
+                "Test PPM rotation stage sensitivity by acquiring images at precise angles. "
+                        + "Analyzes the impact of angular deviations on image quality and birefringence calculations. "
+                        + "Provides comprehensive analysis reports for validation and optimization.",
+                () -> qupath.ext.ppm.workflow.PPMSensitivityTestWorkflow.run()));
+        items.add(new ModalityMenuItem(
+                "birefringenceOptimization",
+                "PPM Birefringence Optimization...",
+                "Find the optimal polarizer angle for maximum birefringence signal contrast. "
+                        + "Systematically tests angles by acquiring paired images (+theta, -theta) and "
+                        + "computing their difference. Results include optimal angles, signal metrics, and "
+                        + "visualization plots. Supports multiple exposure modes (interpolate, calibrate, fixed).",
+                () -> qupath.ext.ppm.workflow.BirefringenceOptimizationWorkflow.run()));
+        items.add(new ModalityMenuItem(
+                "sunburstCalibration",
+                "PPM Reference Slide...",
+                "Create a hue-to-angle calibration from a PPM reference slide with sunburst pattern. "
+                        + "Acquires an image of radial spokes and creates a linear regression mapping "
+                        + "hue values to orientation angles for use in PPM analysis.",
+                () -> qupath.ext.ppm.workflow.SunburstCalibrationWorkflow.run()));
+
+        // Analysis workflows
+        items.add(new ModalityMenuItem(
+                "ppmHueRange",
+                "PPM Hue Range Filter...",
+                "Overlay highlighting pixels whose fiber angle falls within a user-specified range. "
+                        + "Uses the active PPM calibration to convert hue to angle in real time.",
+                () -> qupath.ext.ppm.analysis.PPMHueRangeWorkflow.run()));
+        items.add(new ModalityMenuItem(
+                "ppmPolarityPlot",
+                "PPM Polarity Plot...",
+                "Compute and display a polarity rose diagram for the selected annotation. "
+                        + "Shows fiber angle distribution with circular statistics.",
+                () -> qupath.ext.ppm.analysis.PPMPolarityPlotWorkflow.run()));
+        items.add(new ModalityMenuItem(
+                "ppmPerpendicularity",
+                "Surface Perpendicularity...",
+                "Analyze fiber orientation relative to annotation boundaries (PS-TACS). "
+                        + "Computes perpendicularity scores along tissue surfaces.",
+                () -> qupath.ext.ppm.analysis.PPMPerpendicularityWorkflow.run()));
+        items.add(new ModalityMenuItem(
+                "ppmBatchAnalysis",
+                "Batch PPM Analysis...",
+                "Run PPM analysis across all annotations in the current project. "
+                        + "Exports results as CSV with circular statistics per annotation.",
+                () -> qupath.ext.ppm.analysis.PPMBatchAnalysisWorkflow.run()));
+        items.add(new ModalityMenuItem(
+                "ppmBackPropagate",
+                "Back-Propagate Annotations...",
+                "Transfer annotations from sub-images back to parent/base images. "
+                        + "Uses alignment transforms and XY offsets to map coordinates.",
+                () -> qupath.ext.ppm.analysis.PPMBackPropagationWorkflow.run()));
+
+        return items;
     }
 
     // ========================================================================
