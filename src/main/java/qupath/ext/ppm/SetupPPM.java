@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.ppm.handler.PPMModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.lib.common.GeneralTools;
 import qupath.lib.common.Version;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.extensions.GitHubProject;
@@ -55,7 +56,9 @@ public class SetupPPM implements QuPathExtension, GitHubProject {
 
     @Override
     public void installExtension(QuPathGUI qupath) {
-        logger.info("Installing PPM extension");
+        String extVersion = GeneralTools.getPackageVersion(SetupPPM.class);
+        logger.info("Installing PPM extension v{}", extVersion != null ? extVersion : "dev");
+        logger.info("QuPath version: {}", GeneralTools.getVersion());
 
         // Register PPM modality handler -- QPSC's SetupScope dynamically
         // picks up menu contributions from all registered handlers

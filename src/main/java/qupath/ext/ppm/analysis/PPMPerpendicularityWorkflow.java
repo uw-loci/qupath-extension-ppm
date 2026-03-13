@@ -33,6 +33,7 @@ import javafx.stage.Stage;
 import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.lib.common.GeneralTools;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager.PPMAnalysisSet;
@@ -360,6 +361,11 @@ public class PPMPerpendicularityWorkflow {
                                 tacsThreshold,
                                 fillHoles,
                                 annotationOutputDir);
+
+                        // Add version provenance to result
+                        String extVer = GeneralTools.getPackageVersion(PPMPerpendicularityWorkflow.class);
+                        result.addProperty("ppm_extension_version", extVer != null ? extVer : "dev");
+                        result.addProperty("qupath_version", GeneralTools.getVersion().toString());
 
                         // Save JSON result
                         annotationOutputDir.toFile().mkdirs();
