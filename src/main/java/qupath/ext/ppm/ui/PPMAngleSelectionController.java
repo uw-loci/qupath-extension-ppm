@@ -164,18 +164,30 @@ public class PPMAngleSelectionController {
 
             CheckBox minusCheck = new CheckBox(String.format("%.1f 'degrees'", minusAngle));
             minusCheck.setSelected(PPMPreferences.getMinusSelected());
+            minusCheck.setTooltip(new Tooltip(
+                    "Negative rotation angle. Paired with the positive angle\n"
+                            + "to compute birefringence (difference image)."));
             grid.add(minusCheck, 0, 1);
 
             CheckBox zeroCheck = new CheckBox("0 'degrees'");
             zeroCheck.setSelected(PPMPreferences.getZeroSelected());
+            zeroCheck.setTooltip(new Tooltip(
+                    "Crossed polarizers (0 deg). Baseline extinction position\n"
+                            + "where transmitted light is minimized."));
             grid.add(zeroCheck, 0, 2);
 
             CheckBox plusCheck = new CheckBox(String.format("%.1f 'degrees'", plusAngle));
             plusCheck.setSelected(PPMPreferences.getPlusSelected());
+            plusCheck.setTooltip(new Tooltip(
+                    "Positive rotation angle. Paired with the negative angle\n"
+                            + "to compute birefringence (difference image)."));
             grid.add(plusCheck, 0, 3);
 
             CheckBox uncrossedCheck = new CheckBox(String.format("%.1f 'degrees' (uncrossed)", uncrossedAngle));
             uncrossedCheck.setSelected(PPMPreferences.getUncrossedSelected());
+            uncrossedCheck.setTooltip(new Tooltip(
+                    "Uncrossed (parallel) polarizers. Provides a bright-field\n"
+                            + "reference image. Optional for most PPM workflows."));
             grid.add(uncrossedCheck, 0, 4);
 
             // Persist checkbox selections to preferences

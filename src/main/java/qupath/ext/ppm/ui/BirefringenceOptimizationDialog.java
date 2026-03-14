@@ -12,6 +12,7 @@ import javafx.stage.Modality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.fx.dialogs.Dialogs;
 
 /**
@@ -56,11 +57,14 @@ public class BirefringenceOptimizationDialog {
             }
             dialog.setTitle("PPM Birefringence Optimization");
 
-            // Header with instructions
+            // Header with instructions and help button
             VBox headerBox = new VBox(10);
             headerBox.setPadding(new Insets(10));
             Label headerLabel = new Label("Find Optimal Polarizer Angle for Maximum Birefringence");
             headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
+
+            javafx.scene.layout.HBox headerWithHelp =
+                    DocumentationHelper.createHeaderWithHelp(headerLabel, "birefringenceOptimization");
 
             Label instructionLabel =
                     new Label("This test systematically scans polarizer angles to find the optimal angle\n"
@@ -70,7 +74,7 @@ public class BirefringenceOptimizationDialog {
             instructionLabel.setWrapText(true);
             instructionLabel.setStyle("-fx-font-size: 11px;");
 
-            headerBox.getChildren().addAll(headerLabel, new Separator(), instructionLabel);
+            headerBox.getChildren().addAll(headerWithHelp, new Separator(), instructionLabel);
             dialog.getDialogPane().setHeader(headerBox);
 
             // Buttons
@@ -146,14 +150,23 @@ public class BirefringenceOptimizationDialog {
             Spinner<Double> minAngleSpinner = new Spinner<>(-90.0, 0.0, -10.0, 1.0);
             minAngleSpinner.setEditable(true);
             minAngleSpinner.setPrefWidth(100);
+            minAngleSpinner.setTooltip(new Tooltip(
+                    "Starting angle for the sweep (negative side).\n"
+                            + "Typical value: -10 deg. Range: -90 to 0."));
 
             Spinner<Double> maxAngleSpinner = new Spinner<>(0.0, 90.0, 10.0, 1.0);
             maxAngleSpinner.setEditable(true);
             maxAngleSpinner.setPrefWidth(100);
+            maxAngleSpinner.setTooltip(
+                    new Tooltip("Ending angle for the sweep (positive side).\n" + "Typical value: +10 deg. Range: 0 to 90."));
 
             Spinner<Double> stepSpinner = new Spinner<>(0.01, 1.0, 0.1, 0.01);
             stepSpinner.setEditable(true);
             stepSpinner.setPrefWidth(100);
+            stepSpinner.setTooltip(new Tooltip(
+                    "Angular increment between test points.\n"
+                            + "Smaller steps = finer resolution but longer test.\n"
+                            + "0.1 deg recommended. Steps < 0.05 deg are very slow."));
 
             grid.add(new Label("Min Angle (deg):"), 0, row);
             grid.add(minAngleSpinner, 1, row);
@@ -229,12 +242,22 @@ public class BirefringenceOptimizationDialog {
             RadioButton interpolateMode = new RadioButton("Interpolate (default)");
             interpolateMode.setToggleGroup(exposureModeGroup);
             interpolateMode.setSelected(true);
+            interpolateMode.setTooltip(new Tooltip(
+                    "Uses pre-calibrated exposure values from the sensitivity\n"
+                            + "test and interpolates between them. Fastest option."));
 
             RadioButton calibrateMode = new RadioButton("Calibrate");
             calibrateMode.setToggleGroup(exposureModeGroup);
+            calibrateMode.setTooltip(new Tooltip(
+                    "Measures optimal exposures on a background area first,\n"
+                            + "then acquires on tissue. Most accurate but requires\n"
+                            + "two-phase positioning (background first, then tissue)."));
 
             RadioButton fixedMode = new RadioButton("Fixed");
             fixedMode.setToggleGroup(exposureModeGroup);
+            fixedMode.setTooltip(new Tooltip(
+                    "Uses the same exposure time for all angles.\n"
+                            + "Fastest but may saturate at some angles."));
 
             Label interpolateDesc =
                     new Label("Use calibration points from sensitivity test and interpolate between them (fastest)");
@@ -270,6 +293,9 @@ public class BirefringenceOptimizationDialog {
             fixedExposureSpinner.setEditable(true);
             fixedExposureSpinner.setPrefWidth(100);
             fixedExposureSpinner.setDisable(true);
+            fixedExposureSpinner.setTooltip(new Tooltip(
+                    "Exposure time in milliseconds applied to all angles.\n"
+                            + "Only used when Fixed mode is selected."));
 
             grid.add(new Label("Fixed Exposure (ms):"), 0, row);
             grid.add(fixedExposureSpinner, 1, row);

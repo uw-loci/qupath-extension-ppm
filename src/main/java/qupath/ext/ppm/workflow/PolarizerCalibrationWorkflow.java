@@ -117,7 +117,10 @@ public class PolarizerCalibrationWorkflow {
             instructionLabel.setWrapText(true);
             instructionLabel.setStyle("-fx-font-size: 11px;");
 
-            headerBox.getChildren().addAll(headerLabel, new Separator(), instructionLabel);
+            javafx.scene.layout.HBox headerWithHelp =
+                    qupath.ext.qpsc.utilities.DocumentationHelper.createHeaderWithHelp(
+                            headerLabel, "polarizerCalibration");
+            headerBox.getChildren().addAll(headerWithHelp, new Separator(), instructionLabel);
             dialog.getDialogPane().setHeader(headerBox);
 
             // Buttons

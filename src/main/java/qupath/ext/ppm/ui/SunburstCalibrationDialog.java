@@ -15,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.CameraControlController;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 
@@ -104,9 +105,11 @@ public class SunburstCalibrationDialog {
             VBox root = new VBox(10);
             root.setPadding(new Insets(15));
 
-            // Header with instructions
+            // Header with instructions and help button
             Label headerLabel = new Label("Create Hue-to-Angle Calibration from PPM Reference Slide");
             headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
+
+            HBox headerWithHelp = DocumentationHelper.createHeaderWithHelp(headerLabel, "sunburstCalibration");
 
             Label instructionLabel = new Label("Position the PPM reference slide (sunburst/fan pattern)\n"
                     + "under the microscope and ensure it is properly focused.\n\n"
@@ -127,7 +130,7 @@ public class SunburstCalibrationDialog {
             angleNote.setWrapText(true);
             angleNote.setStyle("-fx-font-size: 11px; -fx-text-fill: #cc6600; -fx-font-weight: bold;");
 
-            root.getChildren().addAll(headerLabel, new Separator(), instructionLabel, angleNote, new Separator());
+            root.getChildren().addAll(headerWithHelp, new Separator(), instructionLabel, angleNote, new Separator());
 
             // Main content layout
             GridPane grid = new GridPane();
