@@ -47,7 +47,7 @@ dependencies {
     shadow(libs.bundles.groovy)
 
     // Depend on QPSC for ModalityHandler, ModalityRegistry, socket client, config manager
-    shadow("io.github.uw-loci:qupath-extension-qpsc:0.3.3")
+    shadow("io.github.uw-loci:qupath-extension-qpsc:0.3.5")
 
     // For testing
     testImplementation(libs.bundles.qupath)
