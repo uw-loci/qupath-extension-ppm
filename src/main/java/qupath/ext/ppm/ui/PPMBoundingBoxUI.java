@@ -55,10 +55,9 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
         label.setStyle("-fx-font-weight: bold;");
 
         overrideAngles = new CheckBox("Override default angles for this acquisition");
-        overrideAngles.setTooltip(new Tooltip(
-                "Override the default +/- rotation angles from config_ppm.yml\n"
-                        + "for this acquisition only. The overridden values are\n"
-                        + "remembered between sessions."));
+        overrideAngles.setTooltip(new Tooltip("Override the default +/- rotation angles from config_ppm.yml\n"
+                + "for this acquisition only. The overridden values are\n"
+                + "remembered between sessions."));
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
@@ -74,20 +73,18 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
         plusSpinner.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(-180, 180, savedPlusAngle, 0.5));
         plusSpinner.setEditable(true);
         plusSpinner.setPrefWidth(100);
-        plusSpinner.setTooltip(new Tooltip(
-                "Positive rotation angle in hardware ticks.\n"
-                        + "This overrides the 'positive' angle from config_ppm.yml.\n"
-                        + "Default from config: " + String.format("%.1f", defaultPlus)));
+        plusSpinner.setTooltip(new Tooltip("Positive rotation angle in hardware ticks.\n"
+                + "This overrides the 'positive' angle from config_ppm.yml.\n"
+                + "Default from config: " + String.format("%.1f", defaultPlus)));
 
         minusSpinner = new Spinner<>();
         minusSpinner.setValueFactory(
                 new SpinnerValueFactory.DoubleSpinnerValueFactory(-180, 180, savedMinusAngle, 0.5));
         minusSpinner.setEditable(true);
         minusSpinner.setPrefWidth(100);
-        minusSpinner.setTooltip(new Tooltip(
-                "Negative rotation angle in hardware ticks.\n"
-                        + "This overrides the 'negative' angle from config_ppm.yml.\n"
-                        + "Default from config: " + String.format("%.1f", defaultMinus)));
+        minusSpinner.setTooltip(new Tooltip("Negative rotation angle in hardware ticks.\n"
+                + "This overrides the 'negative' angle from config_ppm.yml.\n"
+                + "Default from config: " + String.format("%.1f", defaultMinus)));
 
         grid.add(new Label("Plus angle (ticks):"), 0, 0);
         grid.add(plusSpinner, 1, 0);
