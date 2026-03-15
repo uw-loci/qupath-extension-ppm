@@ -1,6 +1,8 @@
 package qupath.ext.ppm.analysis;
 
 import java.awt.image.BufferedImage;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import javafx.application.Platform;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
@@ -16,8 +18,11 @@ import qupath.lib.gui.scripting.QPEx;
 import qupath.lib.gui.viewer.QuPathViewer;
 import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
+import qupath.lib.objects.PathObject;
+import qupath.lib.objects.hierarchy.PathObjectHierarchy;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
+import qupath.lib.roi.interfaces.ROI;
 
 /**
  * Workflow for the PPM hue range filter overlay.
@@ -36,6 +41,12 @@ import qupath.lib.projects.ProjectImageEntry;
 public class PPMHueRangeWorkflow {
 
     private static final Logger logger = LoggerFactory.getLogger(PPMHueRangeWorkflow.class);
+
+    private static final ExecutorService DETECTION_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "PPM-DetectionCreator");
+        t.setDaemon(true);
+        return t;
+    });
 
     private static Stage controlWindow;
     private static PPMHueRangeOverlay activeOverlay;
@@ -146,6 +157,11 @@ public class PPMHueRangeWorkflow {
             viewer.repaint();
         });
 
+        // Wire detection creation
+        panel.setOnCreateDetections(() -> {
+            createDetections(panel, server, calibration, imageData);
+        });
+
         // Show control window
         if (controlWindow == null || !controlWindow.isShowing()) {
             controlWindow = new Stage();
@@ -164,7 +180,7 @@ public class PPMHueRangeWorkflow {
         }
         javafx.scene.layout.VBox.setVgrow(panel, javafx.scene.layout.Priority.ALWAYS);
         wrapper.getChildren().add(panel);
-        controlWindow.setScene(new Scene(wrapper, 380, 440));
+        controlWindow.setScene(new Scene(wrapper, 380, 580));
         controlWindow.show();
         controlWindow.toFront();
 
@@ -179,6 +195,81 @@ public class PPMHueRangeWorkflow {
         logger.info(
                 "PPM hue range filter overlay active on {}",
                 server.getMetadata().getName());
+    }
+
+    /**
+     * Creates detection objects from the current angle range settings.
+     * Runs on a background thread to avoid blocking the UI.
+     */
+    private static void createDetections(
+            PPMHueRangePanel panel,
+            ImageServer<BufferedImage> server,
+            PPMCalibration calibration,
+            ImageData<BufferedImage> imageData) {
+
+        PathObjectHierarchy hierarchy = imageData.getHierarchy();
+
+        // Get selected annotation ROI (if any)
+        PathObject selected = hierarchy.getSelectionModel().getSelectedObject();
+        ROI parentROI = null;
+        if (selected != null && selected.isAnnotation() && selected.hasROI()) {
+            parentROI = selected.getROI();
+        }
+
+        // Get pixel size from server metadata
+        double pixelSizeUm = server.getPixelCalibration().getAveragedPixelSizeMicrons();
+        if (Double.isNaN(pixelSizeUm) || pixelSizeUm <= 0) {
+            pixelSizeUm = 1.0;
+            logger.warn("No pixel calibration available, using 1.0 um/px");
+        }
+
+        // Snapshot parameters from FX thread
+        float angleLow = panel.getAngleLow();
+        float angleHigh = panel.getAngleHigh();
+        float satThreshold = panel.getSaturationThreshold();
+        float valThreshold = panel.getValueThreshold();
+        double downsample = panel.getDetectionDownsample();
+        double minAreaUm2 = panel.getMinAreaUm2();
+        final ROI roi = parentROI;
+        final double pxSize = pixelSizeUm;
+
+        panel.setCreateDetectionsEnabled(false);
+
+        DETECTION_EXECUTOR.submit(() -> {
+            try {
+                int count = PPMDetectionCreator.create(
+                        server,
+                        calibration,
+                        angleLow,
+                        angleHigh,
+                        satThreshold,
+                        valThreshold,
+                        downsample,
+                        roi,
+                        minAreaUm2,
+                        hierarchy,
+                        pxSize);
+
+                Platform.runLater(() -> {
+                    panel.setCreateDetectionsEnabled(true);
+                    if (count > 0) {
+                        Dialogs.showInfoNotification(
+                                "PPM Detections",
+                                String.format(
+                                        "Created %d detection%s (%.0f-%.0f deg)",
+                                        count, count == 1 ? "" : "s", angleLow, angleHigh));
+                    } else {
+                        Dialogs.showInfoNotification("PPM Detections", "No matching regions found.");
+                    }
+                });
+            } catch (Exception e) {
+                logger.error("Failed to create PPM detections", e);
+                Platform.runLater(() -> {
+                    panel.setCreateDetectionsEnabled(true);
+                    Dialogs.showErrorMessage("PPM Detections", "Error creating detections: " + e.getMessage());
+                });
+            }
+        });
     }
 
     /**
