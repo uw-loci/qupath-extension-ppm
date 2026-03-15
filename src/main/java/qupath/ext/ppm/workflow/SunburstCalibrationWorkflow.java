@@ -13,13 +13,14 @@ import javafx.scene.control.Label;
 import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.ppm.ui.CalibrationResultDialog;
-import qupath.ext.ppm.ui.CalibrationResultDialog.CalibrationResultData;
-import qupath.ext.ppm.ui.SunburstCalibrationDialog;
-import qupath.ext.ppm.ui.SunburstCalibrationDialog.SunburstCalibrationParams;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.ppm.PPMPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.ui.CalibrationResultDialog;
+import qupath.ext.qpsc.ui.CalibrationResultDialog.CalibrationResultData;
+import qupath.ext.qpsc.ui.SunburstCalibrationDialog;
+import qupath.ext.qpsc.ui.SunburstCalibrationDialog.SunburstCalibrationParams;
 import qupath.ext.qpsc.ui.ThresholdPreviewDialog;
 import qupath.fx.dialogs.Dialogs;
 
@@ -181,6 +182,11 @@ public class SunburstCalibrationWorkflow {
             // Parse JSON result
             CalibrationResultData resultData = parseCalibrationResult(resultJson);
 
+            // Store successful calibration path as the active calibration
+            if (resultData.success() && resultData.calibrationPath() != null) {
+                PPMPreferences.setActiveCalibrationPath(resultData.calibrationPath());
+            }
+
             // Build center retry callback if we have an image path
             String resultImagePath = resultData.imagePath();
             CalibrationResultDialog.CenterRetryCallback centerRetryCallback = null;
@@ -327,6 +333,11 @@ public class SunburstCalibrationWorkflow {
 
             CalibrationResultData resultData = parseCalibrationResult(resultJson);
 
+            // Store successful calibration path as the active calibration
+            if (resultData.success() && resultData.calibrationPath() != null) {
+                PPMPreferences.setActiveCalibrationPath(resultData.calibrationPath());
+            }
+
             // Build callbacks for the new result
             String resultImagePath = resultData.imagePath() != null ? resultData.imagePath() : imagePath;
 
@@ -413,6 +424,11 @@ public class SunburstCalibrationWorkflow {
                                     centerX);
 
                             CalibrationResultData resultData = parseCalibrationResult(resultJson);
+
+                            // Store successful calibration path as the active calibration
+                            if (resultData.success() && resultData.calibrationPath() != null) {
+                                PPMPreferences.setActiveCalibrationPath(resultData.calibrationPath());
+                            }
 
                             // Build callbacks for further retries
                             String resultImagePath =

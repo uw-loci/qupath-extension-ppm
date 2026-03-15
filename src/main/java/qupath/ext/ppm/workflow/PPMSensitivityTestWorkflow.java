@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 
@@ -103,6 +104,7 @@ public class PPMSensitivityTestWorkflow {
                 dialog.initOwner(gui.getStage());
             }
             dialog.setTitle("PPM Rotation Sensitivity Test");
+            dialog.setGraphic(DocumentationHelper.createHelpButton("ppmSensitivityTest"));
 
             // Header with instructions
             VBox headerBox = new VBox(10);
@@ -123,10 +125,7 @@ public class PPMSensitivityTestWorkflow {
             instructionLabel.setWrapText(true);
             instructionLabel.setStyle("-fx-font-size: 11px;");
 
-            javafx.scene.layout.HBox headerWithHelp =
-                    qupath.ext.qpsc.utilities.DocumentationHelper.createHeaderWithHelp(
-                            headerLabel, "ppmSensitivityTest");
-            headerBox.getChildren().addAll(headerWithHelp, new Separator(), instructionLabel);
+            headerBox.getChildren().addAll(headerLabel, new Separator(), instructionLabel);
             dialog.getDialogPane().setHeader(headerBox);
 
             // Buttons

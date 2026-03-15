@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.lib.common.GeneralTools;
 import qupath.lib.objects.PathObject;
 
 /**
@@ -58,8 +57,7 @@ public class PPMBatchResultsWriter {
 
     // Fixed metadata columns always present in CSV
     private static final List<String> META_COLUMNS = List.of(
-            "image_name", "image_collection", "sample_name", "annotation_name", "annotation_class", "analysis_type",
-            "ppm_extension_version", "qupath_version");
+            "image_name", "image_collection", "sample_name", "annotation_name", "annotation_class", "analysis_type");
 
     /**
      * Stores polarity plot results as measurements on the annotation.
@@ -280,9 +278,6 @@ public class PPMBatchResultsWriter {
         row.put("annotation_name", annotationName != null ? annotationName : "");
         row.put("annotation_class", annotationClass != null ? annotationClass : "");
         row.put("analysis_type", analysisType);
-        String extVersion = GeneralTools.getPackageVersion(PPMBatchResultsWriter.class);
-        row.put("ppm_extension_version", extVersion != null ? extVersion : "dev");
-        row.put("qupath_version", GeneralTools.getVersion().toString());
         return row;
     }
 
