@@ -38,6 +38,7 @@ import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager.PPMAnalysisSet;
 import qupath.fx.dialogs.Dialogs;
+import qupath.lib.common.ColorTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.scripting.QPEx;
 import qupath.lib.images.ImageData;
@@ -45,10 +46,14 @@ import qupath.lib.images.servers.ImageServer;
 import qupath.lib.images.servers.PixelCalibration;
 import qupath.lib.io.GsonTools;
 import qupath.lib.objects.PathObject;
+import qupath.lib.objects.PathObjects;
 import qupath.lib.objects.classes.PathClass;
+import qupath.lib.objects.hierarchy.PathObjectHierarchy;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
+import qupath.lib.regions.ImagePlane;
 import qupath.lib.regions.RegionRequest;
+import qupath.lib.roi.ROIs;
 import qupath.lib.roi.interfaces.ROI;
 
 /**
@@ -83,8 +88,29 @@ public class PPMPerpendicularityWorkflow {
     private static final double DEFAULT_DILATION_UM = 50.0;
     private static final double DEFAULT_TACS_THRESHOLD = 30.0;
 
+    /** Pixels within this margin of the image border are excluded from TACS polylines. */
+    private static final double IMAGE_BORDER_MARGIN_PX = 3.0;
+
+    // TACS-2 = orange (good contrast against H&E purple/pink)
+    private static final int TACS2_COLOR = ColorTools.packRGB(255, 165, 0);
+    // TACS-3 = green (good contrast against H&E eosin)
+    private static final int TACS3_COLOR = ColorTools.packRGB(0, 180, 0);
+
     private static Stage resultWindow;
     private static PPMPerpendicularityPanel resultPanel;
+
+    /** Bundles the Python JSON result with the region offset for coordinate translation. */
+    private static class AnnotationResult {
+        final JsonObject json;
+        final int offsetX;
+        final int offsetY;
+
+        AnnotationResult(JsonObject json, int offsetX, int offsetY) {
+            this.json = json;
+            this.offsetX = offsetX;
+            this.offsetY = offsetY;
+        }
+    }
 
     private PPMPerpendicularityWorkflow() {}
 
@@ -321,6 +347,9 @@ public class PPMPerpendicularityWorkflow {
             // Run in background
             final PPMAnalysisSet finalAnalysisSet = analysisSet;
             final ImageServer<BufferedImage> sumServer = imageData.getServer();
+            final PathObjectHierarchy hierarchy = imageData.getHierarchy();
+            final int imageW = sumServer.getWidth();
+            final int imageH = sumServer.getHeight();
 
             // Build output dir
             Path projectDir = project.getPath().getParent();
@@ -332,6 +361,8 @@ public class PPMPerpendicularityWorkflow {
 
             CompletableFuture.runAsync(() -> {
                 try {
+                    List<PathObject> allTacsPolylines = new ArrayList<>();
+
                     for (int i = 0; i < matchingAnnotations.size(); i++) {
                         PathObject annotation = matchingAnnotations.get(i);
                         String annotationName = annotation.getDisplayedName();
@@ -350,7 +381,7 @@ public class PPMPerpendicularityWorkflow {
 
                         Path annotationOutputDir = outputDir.resolve("annotation_" + annotationIndex);
 
-                        JsonObject result = computeForAnnotation(
+                        AnnotationResult annResult = computeForAnnotation(
                                 sumServer,
                                 annotation.getROI(),
                                 calibrationPath,
@@ -366,11 +397,18 @@ public class PPMPerpendicularityWorkflow {
                         annotationOutputDir.toFile().mkdirs();
                         Path jsonPath = annotationOutputDir.resolve("results.json");
                         try (Writer writer = Files.newBufferedWriter(jsonPath)) {
-                            new Gson().toJson(result, writer);
+                            new Gson().toJson(annResult.json, writer);
                         }
 
+                        // Create TACS polyline annotations from contour data
+                        List<PathObject> polylines = createTACSPolylines(
+                                annResult.json, annResult.offsetX, annResult.offsetY, imageW, imageH);
+                        allTacsPolylines.addAll(polylines);
+
+                        logger.info("Created {} TACS polylines for annotation '{}'", polylines.size(), annotationName);
+
                         // Display results
-                        final JsonObject finalResult = result;
+                        final JsonObject finalResult = annResult.json;
                         final String finalName = annotationName;
                         final int idx = annotationIndex;
                         final int total = totalAnnotations;
@@ -379,6 +417,12 @@ public class PPMPerpendicularityWorkflow {
                                 resultPanel.addResult(finalResult, finalName, idx, total);
                             }
                         });
+                    }
+
+                    // Add all TACS polylines to hierarchy at once
+                    if (!allTacsPolylines.isEmpty()) {
+                        hierarchy.addObjects(allTacsPolylines);
+                        logger.info("Added {} TACS polyline annotations total", allTacsPolylines.size());
                     }
 
                     Platform.runLater(() -> {
@@ -413,7 +457,7 @@ public class PPMPerpendicularityWorkflow {
         dialog.show();
     }
 
-    private static JsonObject computeForAnnotation(
+    private static AnnotationResult computeForAnnotation(
             ImageServer<BufferedImage> sumServer,
             ROI roi,
             String calibrationPath,
@@ -497,7 +541,7 @@ public class PPMPerpendicularityWorkflow {
                     fillHoles,
                     outputDir);
 
-            return result;
+            return new AnnotationResult(result, expandedX, expandedY);
 
         } finally {
             // Clean up temp files
@@ -510,6 +554,110 @@ public class PPMPerpendicularityWorkflow {
                 logger.debug("Could not clean up temp dir: {}", e.getMessage());
             }
         }
+    }
+
+    /**
+     * Creates TACS-2 and TACS-3 Polyline annotations from per-contour-pixel classification.
+     *
+     * <p>Contour points are translated from cropped-region coordinates to full-image
+     * coordinates. Points on the image border are excluded (analyzing fiber orientation
+     * at an image edge is not meaningful). Contiguous runs of the same TACS class
+     * become individual Polyline annotations.</p>
+     *
+     * @param result JSON result from Python analysis
+     * @param offsetX X offset of cropped region in full image
+     * @param offsetY Y offset of cropped region in full image
+     * @param imageW full image width (for border filtering)
+     * @param imageH full image height (for border filtering)
+     * @return list of Polyline PathObjects (may be empty)
+     */
+    private static List<PathObject> createTACSPolylines(
+            JsonObject result, int offsetX, int offsetY, int imageW, int imageH) {
+
+        List<PathObject> polylines = new ArrayList<>();
+
+        JsonObject pstacs =
+                result.has("pstacs") && !result.get("pstacs").isJsonNull() ? result.getAsJsonObject("pstacs") : null;
+        if (pstacs == null) return polylines;
+
+        JsonArray pointsArr = pstacs.has("contour_points") ? pstacs.getAsJsonArray("contour_points") : null;
+        JsonArray classArr = pstacs.has("contour_tacs_class") ? pstacs.getAsJsonArray("contour_tacs_class") : null;
+        if (pointsArr == null || classArr == null || pointsArr.size() == 0) return polylines;
+
+        int n = Math.min(pointsArr.size(), classArr.size());
+
+        // Get or create TACS PathClasses with specified colors
+        PathClass tacs2Class = PathClass.fromString("TACS-2", TACS2_COLOR);
+        tacs2Class.setColor(TACS2_COLOR);
+        PathClass tacs3Class = PathClass.fromString("TACS-3", TACS3_COLOR);
+        tacs3Class.setColor(TACS3_COLOR);
+
+        double margin = IMAGE_BORDER_MARGIN_PX;
+
+        // Walk the contour and group contiguous runs of the same class,
+        // splitting at image-border points
+        List<Double> segX = new ArrayList<>();
+        List<Double> segY = new ArrayList<>();
+        int currentClass = -1;
+
+        for (int i = 0; i < n; i++) {
+            JsonArray pt = pointsArr.get(i).getAsJsonArray();
+            double px = pt.get(0).getAsDouble() + offsetX;
+            double py = pt.get(1).getAsDouble() + offsetY;
+            int tacsClass = classArr.get(i).getAsInt();
+
+            // Skip points on the image border
+            if (px < margin || py < margin || px > imageW - margin || py > imageH - margin) {
+                // Flush current segment if non-empty
+                if (!segX.isEmpty()) {
+                    PathObject polyline = buildPolyline(segX, segY, currentClass == 3 ? tacs3Class : tacs2Class);
+                    if (polyline != null) polylines.add(polyline);
+                    segX.clear();
+                    segY.clear();
+                    currentClass = -1;
+                }
+                continue;
+            }
+
+            if (tacsClass != currentClass && !segX.isEmpty()) {
+                // Class changed - flush previous segment
+                PathObject polyline = buildPolyline(segX, segY, currentClass == 3 ? tacs3Class : tacs2Class);
+                if (polyline != null) polylines.add(polyline);
+                segX.clear();
+                segY.clear();
+            }
+
+            currentClass = tacsClass;
+            segX.add(px);
+            segY.add(py);
+        }
+
+        // Flush final segment
+        if (!segX.isEmpty()) {
+            PathObject polyline = buildPolyline(segX, segY, currentClass == 3 ? tacs3Class : tacs2Class);
+            if (polyline != null) polylines.add(polyline);
+        }
+
+        return polylines;
+    }
+
+    /**
+     * Builds a Polyline annotation from accumulated point lists.
+     * Returns null if fewer than 2 points (can't form a line).
+     */
+    private static PathObject buildPolyline(List<Double> xList, List<Double> yList, PathClass pathClass) {
+        int size = xList.size();
+        if (size < 2) return null;
+
+        double[] xs = new double[size];
+        double[] ys = new double[size];
+        for (int i = 0; i < size; i++) {
+            xs[i] = xList.get(i);
+            ys[i] = yList.get(i);
+        }
+
+        ROI polylineRoi = ROIs.createPolylineROI(xs, ys, ImagePlane.getDefaultPlane());
+        return PathObjects.createAnnotationObject(polylineRoi, pathClass);
     }
 
     /**
