@@ -1,7 +1,7 @@
 # QuPath PPM (Polarized light Microscopy) Extension
 
 [![QuPath Version](https://img.shields.io/badge/qupath-0.6.0+-blue)](https://qupath.github.io/)
-[![License](https://img.shields.io/badge/license-MIT-lightgrey)](#license)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](#license)
 [![Status](https://img.shields.io/badge/status-pre--release-orange)](#)
 
 > **Part of the QPSC (QuPath Scope Control) system**
@@ -186,4 +186,8 @@ Java handles QuPath I/O (reading image regions, annotations, GeoJSON export, res
 
 ## License
 
-This project is licensed under the MIT License.
+Apache License 2.0 - see [LICENSE](LICENSE) for details.
+
+## AI-Assisted Development
+
+This project was developed with assistance from [Claude](https://claude.ai) (Anthropic). Claude was used as a development tool for code generation, architecture design, debugging, and documentation throughout the project.
