@@ -105,34 +105,38 @@ public class PPMPolarityPlotWorkflow {
             return;
         }
 
-        // Validate the current image is the sum image
+        // Validate the current image is a PPM color (angle) image, not biref
         Project<BufferedImage> project = gui.getProject();
         ProjectImageEntry<BufferedImage> currentEntry = project != null ? project.getEntry(imageData) : null;
 
         if (currentEntry != null) {
             String angle = currentEntry.getMetadata().get("angle");
             String imageName = currentEntry.getImageName();
-            boolean isSum = (angle != null && angle.toLowerCase().contains("sum"))
-                    || (imageName != null && imageName.contains("_sum"));
+            boolean isBiref = (angle != null && angle.toLowerCase().contains("biref"))
+                    || (imageName != null && imageName.toLowerCase().contains("biref"));
 
-            if (!isSum) {
+            if (isBiref) {
                 PPMAnalysisSet analysisSetCheck =
                         project != null ? ImageMetadataManager.findPPMAnalysisSet(currentEntry, project) : null;
-                String sumHint = "";
-                if (analysisSetCheck != null && analysisSetCheck.hasSumImage()) {
-                    sumHint = "\n\nThe sum image in this set is:\n  " + analysisSetCheck.sumImage.getImageName();
+                String angleHint = "";
+                if (analysisSetCheck != null && !analysisSetCheck.angleImages.isEmpty()) {
+                    angleHint = "\n\nAngle images in this set:\n";
+                    for (var angleImg : analysisSetCheck.angleImages) {
+                        angleHint += "  - " + angleImg.getImageName() + "\n";
+                    }
                 }
 
                 Dialogs.showErrorMessage(
                         "PPM Polarity Plot",
                         DocumentationHelper.withDocLink(
-                                "This analysis must be run on the sum image.\n"
+                                "This analysis requires a PPM color (angle) image.\n"
                                         + "The currently open image ("
                                         + (imageName != null ? imageName : "unknown")
-                                        + ") does not appear to be a sum image.\n\n"
-                                        + "Open the sum image in the viewer, select an "
-                                        + "annotation, then run this analysis again."
-                                        + sumHint,
+                                        + ") is the birefringence image, which is grayscale.\n\n"
+                                        + "Open any angle image from this set (e.g. positive or\n"
+                                        + "negative angle), select an annotation, then run this\n"
+                                        + "analysis again."
+                                        + angleHint,
                                 "ppmPolarityPlot"));
                 return;
             }

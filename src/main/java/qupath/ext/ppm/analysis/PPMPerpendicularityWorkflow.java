@@ -175,32 +175,41 @@ public class PPMPerpendicularityWorkflow {
             return;
         }
 
-        // Validate the current image is the sum image
+        // Validate the current image is a PPM color (angle) image, not the biref image.
+        // The analysis needs an RGB image for PPM angle computation via calibration.
+        // Any angle image (positive, negative, crossed, uncrossed) works -- they are
+        // pixel-identical for orientation purposes. The biref image is grayscale
+        // and cannot be used as the color source.
         ProjectImageEntry<BufferedImage> currentEntry = project.getEntry(imageData);
         if (currentEntry != null) {
             String angle = currentEntry.getMetadata().get("angle");
             String imageName = currentEntry.getImageName();
-            boolean isSum = (angle != null && angle.toLowerCase().contains("sum"))
-                    || (imageName != null && imageName.contains("_sum"));
+            boolean isBiref = (angle != null && angle.toLowerCase().contains("biref"))
+                    || (imageName != null && imageName.toLowerCase().contains("biref"));
 
-            if (!isSum) {
-                // Check if we can identify the sum image for the user
+            if (isBiref) {
+                // Try to identify an angle image for the user
                 PPMAnalysisSet analysisSetCheck = ImageMetadataManager.findPPMAnalysisSet(currentEntry, project);
-                String sumHint = "";
-                if (analysisSetCheck != null && analysisSetCheck.hasSumImage()) {
-                    sumHint = "\n\nThe sum image in this set is:\n  " + analysisSetCheck.sumImage.getImageName();
+                String angleHint = "";
+                if (analysisSetCheck != null && !analysisSetCheck.angleImages.isEmpty()) {
+                    angleHint = "\n\nAngle images in this set:\n";
+                    for (var angleImg : analysisSetCheck.angleImages) {
+                        angleHint += "  - " + angleImg.getImageName() + "\n";
+                    }
                 }
 
                 Dialogs.showErrorMessage(
                         "Surface Perpendicularity Analysis",
                         DocumentationHelper.withDocLink(
-                                "This analysis must be run on the sum image.\n"
+                                "This analysis requires a PPM color (angle) image.\n"
                                         + "The currently open image ("
                                         + (imageName != null ? imageName : "unknown")
-                                        + ") does not appear to be a sum image.\n\n"
-                                        + "Open the sum image in the viewer, draw boundary "
-                                        + "annotations on it, then run this analysis again."
-                                        + sumHint,
+                                        + ") is the birefringence image, which is grayscale.\n\n"
+                                        + "Open any angle image from this set (e.g. positive or\n"
+                                        + "negative angle), draw boundary annotations on it,\n"
+                                        + "then run this analysis again. The birefringence image\n"
+                                        + "will be found automatically for threshold masking."
+                                        + angleHint,
                                 "ppmPerpendicularity"));
                 return;
             }
@@ -291,10 +300,10 @@ public class PPMPerpendicularityWorkflow {
         int row = 0;
 
         // Image info header
-        String sumImageName = currentEntry != null ? currentEntry.getImageName() : "unknown";
+        String colorImageName = currentEntry != null ? currentEntry.getImageName() : "unknown";
         PPMAnalysisSet previewSet =
                 currentEntry != null ? ImageMetadataManager.findPPMAnalysisSet(currentEntry, project) : null;
-        Label imageInfoLabel = new Label("Sum image: " + sumImageName
+        Label imageInfoLabel = new Label("Color image: " + colorImageName
                 + (previewSet != null && previewSet.hasBirefImage()
                         ? "\nBirefringence: " + previewSet.birefImage.getImageName()
                         : "\nBirefringence: not found (threshold masking unavailable)"));
