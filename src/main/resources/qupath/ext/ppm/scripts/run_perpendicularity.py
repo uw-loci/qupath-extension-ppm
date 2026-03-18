@@ -99,6 +99,10 @@ try:
 
     # Compute diagnostic mask statistics so the user can understand
     # how thresholds are affecting the analysis
+    from scipy import ndimage as ndi
+    from ppm_library.analysis.surface_analysis import compute_border_zone_mask
+    from skimage.morphology import remove_small_objects
+
     total_pixels = sum_arr.shape[0] * sum_arr.shape[1]
 
     # HSV-valid mask (same computation as inside analyze_perpendicularity)
@@ -121,8 +125,31 @@ try:
 
     combined_valid_count = int(np.count_nonzero(combined_mask))
 
-    # Rasterize boundary to compute zone stats
-    zone_valid_count = combined_valid_count  # approximation before zone mask
+    # Compute the zone mask (same as analyze_perpendicularity does internally)
+    # so the returned mask shows ONLY what was actually analyzed
+    mask_for_zone = boundary_mask.copy()
+    if fill_holes:
+        mask_for_zone = ndi.binary_fill_holes(mask_for_zone)
+
+    dilation_px_int = max(1, int(round(dilation_um / pixel_size_um)))
+    zone_result = compute_border_zone_mask(
+        mask_for_zone, dilation_px_int, mode=zone_mode, fill_holes=False
+    )
+    zone_mask = zone_result['zone_mask']
+
+    # Intersect foreground with zone -> only pixels that were actually analyzed
+    analysis_mask = combined_mask & zone_mask
+    analysis_valid_count = int(np.count_nonzero(analysis_mask))
+
+    # Gaussian smooth + re-threshold to clean up noisy fragments
+    smoothed = ndi.gaussian_filter(analysis_mask.astype(np.float32), sigma=2.0)
+    analysis_mask = smoothed > 0.3
+
+    # Remove small connected components (area threshold)
+    min_object_area = 100  # pixels
+    analysis_mask = remove_small_objects(analysis_mask, min_size=min_object_area)
+
+    final_valid_count = int(np.count_nonzero(analysis_mask))
 
     # Add diagnostics to result
     result['mask_diagnostics'] = {
@@ -130,20 +157,27 @@ try:
         'hsv_valid_pixels': hsv_valid_count,
         'biref_valid_pixels': biref_valid_count,
         'combined_valid_pixels': combined_valid_count,
+        'zone_pixels': int(np.count_nonzero(zone_mask)),
+        'analysis_valid_pixels': analysis_valid_count,
+        'final_pixels_after_cleanup': final_valid_count,
     }
 
-    # Return the combined foreground mask as an NDArray for visualization
-    mask_uint8 = (combined_mask.astype(np.uint8) * 255)
+    # Return the analysis mask as an NDArray for visualization
+    mask_uint8 = (analysis_mask.astype(np.uint8) * 255)
     h_mask, w_mask = mask_uint8.shape
     mask_nd = PyNDArray(dtype="uint8", shape=[h_mask, w_mask])
     np.copyto(mask_nd.ndarray(), mask_uint8)
     task.outputs['foreground_mask'] = mask_nd
 
     logger.info(
-        "Mask stats: total=%d, hsv_valid=%d, biref_valid=%s, combined=%d",
+        "Mask stats: total=%d, hsv=%d, biref=%s, combined=%d, "
+        "zone=%d, analysis=%d, final=%d",
         total_pixels, hsv_valid_count,
         biref_valid_count if biref_valid_count >= 0 else "N/A",
         combined_valid_count,
+        int(np.count_nonzero(zone_mask)),
+        analysis_valid_count,
+        final_valid_count,
     )
 
     # Convert result to JSON-serializable format

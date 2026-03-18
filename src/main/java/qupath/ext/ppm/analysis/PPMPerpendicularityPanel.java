@@ -136,7 +136,7 @@ public class PPMPerpendicularityPanel extends VBox {
     private VBox createMaskDiagnostics(JsonObject diag) {
         VBox box = new VBox(2);
 
-        Label title = new Label("Pixel Filtering");
+        Label title = new Label("Pixel Filtering Pipeline");
         title.setFont(Font.font("System", FontWeight.BOLD, 11));
         box.getChildren().add(title);
 
@@ -144,35 +144,47 @@ public class PPMPerpendicularityPanel extends VBox {
         int hsvValid = getInt(diag, "hsv_valid_pixels", 0);
         int birefValid = getInt(diag, "biref_valid_pixels", -1);
         int combined = getInt(diag, "combined_valid_pixels", 0);
+        int zonePx = getInt(diag, "zone_pixels", -1);
+        int analysisValid = getInt(diag, "analysis_valid_pixels", -1);
+        int finalPx = getInt(diag, "final_pixels_after_cleanup", -1);
 
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format("Total pixels:     %,d%n", total));
-        sb.append(String.format(
-                "HSV valid:        %,d (%s)%n",
-                hsvValid, total > 0 ? String.format("%.1f%%", 100.0 * hsvValid / total) : "N/A"));
+        sb.append(String.format("Region pixels:    %,d%n", total));
+        sb.append(String.format("HSV valid:        %,d (%s)%n", hsvValid, pct(hsvValid, total)));
         if (birefValid >= 0) {
-            sb.append(String.format(
-                    "Biref valid:      %,d (%s)%n",
-                    birefValid, total > 0 ? String.format("%.1f%%", 100.0 * birefValid / total) : "N/A"));
+            sb.append(String.format("Biref valid:      %,d (%s)%n", birefValid, pct(birefValid, total)));
         }
-        sb.append(String.format(
-                "Combined valid:   %,d (%s)",
-                combined, total > 0 ? String.format("%.1f%%", 100.0 * combined / total) : "N/A"));
+        sb.append(String.format("Combined valid:   %,d (%s)%n", combined, pct(combined, total)));
+        if (zonePx >= 0) {
+            sb.append(String.format("Zone pixels:      %,d (%s)%n", zonePx, pct(zonePx, total)));
+        }
+        if (analysisValid >= 0) {
+            sb.append(String.format("In zone + valid:  %,d (%s)%n", analysisValid, pct(analysisValid, total)));
+        }
+        if (finalPx >= 0) {
+            sb.append(String.format("After cleanup:    %,d (%s)", finalPx, pct(finalPx, total)));
+        }
 
         Label statsLabel = new Label(sb.toString());
         statsLabel.setFont(Font.font("Monospaced", 11));
         box.getChildren().add(statsLabel);
 
-        // Warning if very few pixels survived filtering
-        if (total > 0 && combined < total * 0.01) {
-            Label warning = new Label("Warning: Less than 1% of pixels passed filtering. "
-                    + "Consider adjusting HSV or birefringence thresholds.");
+        // Warning if very few pixels survived the full pipeline
+        int effectiveCount = finalPx >= 0 ? finalPx : (analysisValid >= 0 ? analysisValid : combined);
+        if (total > 0 && effectiveCount < total * 0.005) {
+            Label warning = new Label("Warning: Very few pixels in analysis zone passed filtering. "
+                    + "Consider adjusting thresholds or dilation distance.");
             warning.setWrapText(true);
             warning.setStyle("-fx-text-fill: #CC6600; -fx-font-weight: bold; -fx-font-size: 10px;");
             box.getChildren().add(warning);
         }
 
         return box;
+    }
+
+    private static String pct(int count, int total) {
+        if (total <= 0) return "N/A";
+        return String.format("%.1f%%", 100.0 * count / total);
     }
 
     private VBox createSimpleResults(JsonObject simple) {
