@@ -5,6 +5,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import java.awt.image.BufferedImage;
+import java.awt.image.Raster;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
@@ -25,9 +26,12 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.RadioButton;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
+import javafx.scene.control.Toggle;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
 import javafx.util.Duration;
@@ -42,12 +46,14 @@ import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager.PPMAnalysisSet;
 import qupath.fx.dialogs.Dialogs;
+import qupath.lib.classifiers.pixel.PixelClassifier;
 import qupath.lib.common.ColorTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.scripting.QPEx;
 import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
 import qupath.lib.images.servers.PixelCalibration;
+import qupath.opencv.ml.pixel.PixelClassifierTools;
 import qupath.lib.io.GsonTools;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.PathObjects;
@@ -305,14 +311,26 @@ public class PPMPerpendicularityWorkflow {
         grid.add(fillHolesBox, 0, row, 2, 1);
         row++;
 
-        // --- Pixel filtering section ---
-        Label filterHeader = new Label("Pixel Filtering");
+        // --- Foreground detection section ---
+        Label filterHeader = new Label("Foreground Detection");
         filterHeader.setStyle("-fx-font-weight: bold; -fx-padding: 8 0 2 0;");
         grid.add(filterHeader, 0, row, 3, 1);
         row++;
 
-        // Birefringence threshold
-        grid.add(new Label("Birefringence threshold:"), 0, row);
+        // Radio toggle: threshold vs pixel classifier
+        ToggleGroup foregroundToggle = new ToggleGroup();
+        RadioButton thresholdRadio = new RadioButton("Intensity thresholds");
+        thresholdRadio.setToggleGroup(foregroundToggle);
+        thresholdRadio.setSelected(true);
+        RadioButton classifierRadio = new RadioButton("Pixel classifier");
+        classifierRadio.setToggleGroup(foregroundToggle);
+        HBox radioBox = new HBox(15, thresholdRadio, classifierRadio);
+        grid.add(radioBox, 0, row, 3, 1);
+        row++;
+
+        // -- Threshold controls --
+        Label birefLabel = new Label("Birefringence threshold:");
+        grid.add(birefLabel, 0, row);
         Spinner<Double> birefSpinner =
                 new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 1000, getBirefThreshold(), 10));
         birefSpinner.setEditable(true);
@@ -326,8 +344,8 @@ public class PPMPerpendicularityWorkflow {
         grid.add(birefSpinner, 1, row);
         row++;
 
-        // Saturation threshold
-        grid.add(new Label("HSV saturation threshold:"), 0, row);
+        Label satLabel = new Label("HSV saturation threshold:");
+        grid.add(satLabel, 0, row);
         Spinner<Double> satSpinner =
                 new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 1, PPMPreferences.getSaturationThreshold(), 0.05));
         satSpinner.setEditable(true);
@@ -339,8 +357,8 @@ public class PPMPerpendicularityWorkflow {
         grid.add(satSpinner, 1, row);
         row++;
 
-        // Value threshold
-        grid.add(new Label("HSV value threshold:"), 0, row);
+        Label valLabel = new Label("HSV value threshold:");
+        grid.add(valLabel, 0, row);
         Spinner<Double> valSpinner =
                 new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 1, PPMPreferences.getValueThreshold(), 0.05));
         valSpinner.setEditable(true);
@@ -351,6 +369,43 @@ public class PPMPerpendicularityWorkflow {
         valSpinner.setTooltip(valTip);
         grid.add(valSpinner, 1, row);
         row++;
+
+        // -- Pixel classifier controls --
+        Label classifierLabel = new Label("Classifier:");
+        grid.add(classifierLabel, 0, row);
+        ChoiceBox<String> classifierChoice = new ChoiceBox<>();
+        // Discover available pixel classifiers from the project
+        List<String> classifierNames = new ArrayList<>();
+        try {
+            var classifierManager = project.getPixelClassifiers();
+            classifierNames.addAll(classifierManager.getNames());
+        } catch (Exception ex) {
+            logger.debug("Could not list pixel classifiers: {}", ex.getMessage());
+        }
+        if (classifierNames.isEmpty()) {
+            classifierNames.add("(none available)");
+        }
+        classifierChoice.getItems().addAll(classifierNames);
+        classifierChoice.setValue(classifierNames.get(0));
+        Tooltip classifierTip = new Tooltip(
+                "Select a pixel classifier or thresholder from the project.\n"
+                        + "The classifier's positive/foreground class will be used\n"
+                        + "as the analysis mask instead of the birefringence threshold.");
+        classifierTip.setShowDelay(Duration.millis(400));
+        classifierChoice.setTooltip(classifierTip);
+        grid.add(classifierChoice, 1, row);
+        row++;
+
+        // Toggle enable/disable based on radio selection
+        classifierLabel.setDisable(true);
+        classifierChoice.setDisable(true);
+        foregroundToggle.selectedToggleProperty().addListener((obs, oldVal, newVal) -> {
+            boolean useThresholds = newVal == thresholdRadio;
+            birefLabel.setDisable(!useThresholds);
+            birefSpinner.setDisable(!useThresholds);
+            classifierLabel.setDisable(useThresholds);
+            classifierChoice.setDisable(useThresholds);
+        });
 
         // Pixel size display
         grid.add(new Label("Pixel size:"), 0, row);
@@ -395,6 +450,17 @@ public class PPMPerpendicularityWorkflow {
             double birefThreshold = birefSpinner.getValue();
             double satThreshold = satSpinner.getValue();
             double valThreshold = valSpinner.getValue();
+            boolean useClassifier = classifierRadio.isSelected();
+            String selectedClassifier = classifierChoice.getValue();
+
+            // Validate classifier selection
+            if (useClassifier && ("(none available)".equals(selectedClassifier) || selectedClassifier == null)) {
+                Dialogs.showErrorMessage(
+                        "Surface Perpendicularity Analysis",
+                        "No pixel classifier selected. Create a pixel classifier or thresholder\n"
+                                + "in the QuPath project first, or switch to threshold mode.");
+                return;
+            }
 
             // Collect matching annotations
             List<PathObject> matchingAnnotations = allAnnotations.stream()
@@ -414,14 +480,29 @@ public class PPMPerpendicularityWorkflow {
             // Show results window
             ensureResultWindow(gui);
 
-            // Find analysis set for biref
+            // Find analysis set for biref (not needed if using classifier)
             PPMAnalysisSet analysisSet = null;
-            if (currentEntry != null) {
+            if (!useClassifier && currentEntry != null) {
                 analysisSet = ImageMetadataManager.findPPMAnalysisSet(currentEntry, project);
+            }
+
+            // Load pixel classifier if selected (must be done on FX thread / before background)
+            PixelClassifier pixelClassifier = null;
+            if (useClassifier) {
+                try {
+                    pixelClassifier = project.getPixelClassifiers().get(selectedClassifier);
+                } catch (Exception ex) {
+                    logger.error("Failed to load pixel classifier '{}': {}", selectedClassifier, ex.getMessage());
+                    Dialogs.showErrorMessage(
+                            "Surface Perpendicularity Analysis",
+                            "Failed to load pixel classifier '" + selectedClassifier + "': " + ex.getMessage());
+                    return;
+                }
             }
 
             // Run in background
             final PPMAnalysisSet finalAnalysisSet = analysisSet;
+            final PixelClassifier finalClassifier = pixelClassifier;
             final ImageServer<BufferedImage> sumServer = imageData.getServer();
             final PathObjectHierarchy hierarchy = imageData.getHierarchy();
             final int imageW = sumServer.getWidth();
@@ -459,6 +540,7 @@ public class PPMPerpendicularityWorkflow {
 
                         AnnotationResult annResult = computeForAnnotation(
                                 sumServer,
+                                imageData,
                                 annotation.getROI(),
                                 calibrationPath,
                                 finalAnalysisSet,
@@ -470,6 +552,7 @@ public class PPMPerpendicularityWorkflow {
                                 birefThreshold,
                                 satThreshold,
                                 valThreshold,
+                                finalClassifier,
                                 annotationOutputDir);
 
                         // Save JSON result
@@ -538,13 +621,14 @@ public class PPMPerpendicularityWorkflow {
         scrollPane.setFitToWidth(true);
         scrollPane.setStyle("-fx-background-color: transparent;");
 
-        dialog.setScene(new Scene(scrollPane, 550, 580));
+        dialog.setScene(new Scene(scrollPane, 550, 650));
         dialog.setResizable(true);
         dialog.show();
     }
 
     private static AnnotationResult computeForAnnotation(
             ImageServer<BufferedImage> sumServer,
+            ImageData<BufferedImage> imageData,
             ROI roi,
             String calibrationPath,
             PPMAnalysisSet analysisSet,
@@ -556,6 +640,7 @@ public class PPMPerpendicularityWorkflow {
             double birefThreshold,
             double saturationThreshold,
             double valueThreshold,
+            PixelClassifier classifier,
             Path outputDir)
             throws Exception {
 
@@ -594,9 +679,15 @@ public class PPMPerpendicularityWorkflow {
             Path sumPath = tempDir.resolve("sum_region.tif");
             ImageIO.write(sumRegion, "TIFF", sumPath.toFile());
 
-            // Write biref region if available
             Path birefPath = null;
-            if (analysisSet != null && analysisSet.hasBirefImage()) {
+            Path foregroundMaskPath = null;
+
+            if (classifier != null) {
+                // Pixel classifier mode: generate binary foreground mask
+                foregroundMaskPath = generateClassifierMask(
+                        imageData, classifier, expandedX, expandedY, expandedW, expandedH, tempDir);
+            } else if (analysisSet != null && analysisSet.hasBirefImage()) {
+                // Intensity threshold mode: write biref region
                 try {
                     @SuppressWarnings("unchecked")
                     ImageData<BufferedImage> birefData =
@@ -623,6 +714,7 @@ public class PPMPerpendicularityWorkflow {
                     calibrationPath,
                     geojsonPath,
                     birefPath,
+                    foregroundMaskPath,
                     pixelSizeUm,
                     dilationUm,
                     zoneMode,
@@ -645,6 +737,60 @@ public class PPMPerpendicularityWorkflow {
             } catch (Exception e) {
                 logger.debug("Could not clean up temp dir: {}", e.getMessage());
             }
+        }
+    }
+
+    /**
+     * Applies a pixel classifier to a region and writes the result as a binary
+     * mask TIFF (255 = foreground, 0 = background).
+     *
+     * <p>Any non-zero classification label is treated as foreground. This works
+     * with both trained pixel classifiers and simple thresholders created in
+     * QuPath's "Create thresholder" dialog.</p>
+     */
+    private static Path generateClassifierMask(
+            ImageData<BufferedImage> imageData,
+            PixelClassifier classifier,
+            int x, int y, int w, int h,
+            Path tempDir)
+            throws Exception {
+
+        try (ImageServer<BufferedImage> classServer =
+                     PixelClassifierTools.createPixelClassificationServer(imageData, classifier)) {
+
+            RegionRequest classRequest = RegionRequest.createInstance(
+                    classServer.getPath(), 1.0, x, y, w, h);
+            BufferedImage classImage = classServer.readRegion(classRequest);
+
+            // Convert to binary mask: any non-zero class index = foreground (255)
+            int maskW = classImage.getWidth();
+            int maskH = classImage.getHeight();
+            BufferedImage mask = new BufferedImage(maskW, maskH, BufferedImage.TYPE_BYTE_GRAY);
+            Raster classRaster = classImage.getRaster();
+
+            for (int py = 0; py < maskH; py++) {
+                for (int px = 0; px < maskW; px++) {
+                    int classIndex = classRaster.getSample(px, py, 0);
+                    if (classIndex > 0) {
+                        mask.getRaster().setSample(px, py, 0, 255);
+                    }
+                }
+            }
+
+            Path maskPath = tempDir.resolve("foreground_mask.tif");
+            ImageIO.write(mask, "TIFF", maskPath.toFile());
+
+            int fgCount = 0;
+            for (int py = 0; py < maskH; py++) {
+                for (int px = 0; px < maskW; px++) {
+                    if (mask.getRaster().getSample(px, py, 0) > 0) fgCount++;
+                }
+            }
+            logger.info("Classifier mask: {}x{}, {} foreground pixels ({} pct)",
+                    maskW, maskH, fgCount,
+                    maskW * maskH > 0 ? String.format("%.1f", 100.0 * fgCount / (maskW * maskH)) : "0");
+
+            return maskPath;
         }
     }
 
@@ -812,6 +958,7 @@ public class PPMPerpendicularityWorkflow {
             String calibrationPath,
             Path geojsonPath,
             Path birefPath,
+            Path foregroundMaskPath,
             double pixelSizeUm,
             double dilationUm,
             String zoneMode,
@@ -852,7 +999,12 @@ public class PPMPerpendicularityWorkflow {
             command.add("--no-fill-holes");
         }
 
-        if (birefPath != null) {
+        if (foregroundMaskPath != null) {
+            // Pixel classifier mode: pass pre-computed foreground mask
+            command.add("--foreground-mask");
+            command.add(foregroundMaskPath.toString());
+        } else if (birefPath != null) {
+            // Intensity threshold mode: pass biref image for thresholding
             command.add("--biref");
             command.add(birefPath.toString());
             command.add("--biref-threshold");
