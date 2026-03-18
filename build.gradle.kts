@@ -49,6 +49,9 @@ dependencies {
     // Depend on QPSC for ModalityHandler, ModalityRegistry, socket client, config manager
     shadow("io.github.uw-loci:qupath-extension-qpsc:0.3.6")
 
+    // Appose -- embedded Python environment for PPM analysis (ppm_library)
+    implementation("org.apposed:appose:0.10.0")
+
     // For testing
     testImplementation(libs.bundles.qupath)
     testImplementation("io.github.qupath:qupath-app:0.6.0-rc4")
@@ -58,6 +61,11 @@ dependencies {
     testImplementation(libs.qupath.fxtras)
     testImplementation("org.mockito:mockito-core:5.14.2")
     testImplementation("org.mockito:mockito-junit-jupiter:5.14.2")
+}
+
+// Merge META-INF/services files so ServiceLoader discovers Appose implementations
+tasks.shadowJar {
+    mergeServiceFiles()
 }
 
 // For troubleshooting deprecation warnings

@@ -79,7 +79,8 @@ public class PPMBackPropagationWorkflow {
                 runOnFXThread();
             } catch (Exception e) {
                 logger.error("Failed to run back-propagation workflow", e);
-                Dialogs.showErrorMessage("Back-Propagation",
+                Dialogs.showErrorMessage(
+                        "Back-Propagation",
                         DocumentationHelper.withDocLink("Error: " + e.getMessage(), "ppmBackPropagate"));
             }
         });
@@ -89,15 +90,16 @@ public class PPMBackPropagationWorkflow {
     private static void runOnFXThread() {
         QuPathGUI gui = QuPathGUI.getInstance();
         if (gui == null) {
-            Dialogs.showErrorMessage("Back-Propagation",
+            Dialogs.showErrorMessage(
+                    "Back-Propagation",
                     DocumentationHelper.withDocLink("QuPath GUI not available.", "ppmBackPropagate"));
             return;
         }
 
         Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
         if (project == null) {
-            Dialogs.showErrorMessage("Back-Propagation",
-                    DocumentationHelper.withDocLink("No project is open.", "ppmBackPropagate"));
+            Dialogs.showErrorMessage(
+                    "Back-Propagation", DocumentationHelper.withDocLink("No project is open.", "ppmBackPropagate"));
             return;
         }
 
@@ -212,7 +214,8 @@ public class PPMBackPropagationWorkflow {
             }
         }
         if (selectedClasses.isEmpty()) {
-            Dialogs.showWarningNotification("Back-Propagation",
+            Dialogs.showWarningNotification(
+                    "Back-Propagation",
                     DocumentationHelper.withDocLink("No annotation classes selected.", "ppmBackPropagate"));
             return;
         }

@@ -6,17 +6,15 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import java.awt.image.BufferedImage;
 import java.awt.image.Raster;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.InputStreamReader;
+import java.io.IOException;
 import java.io.Writer;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import javafx.application.Platform;
@@ -30,18 +28,19 @@ import javafx.scene.control.RadioButton;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
-import javafx.scene.control.Toggle;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
-import javafx.util.Duration;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
-import javax.imageio.ImageIO;
+import javafx.util.Duration;
+import org.apposed.appose.NDArray;
+import org.apposed.appose.Service.Task;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.ppm.PPMPreferences;
+import qupath.ext.ppm.service.ApposePPMService;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager.PPMAnalysisSet;
@@ -53,7 +52,6 @@ import qupath.lib.gui.scripting.QPEx;
 import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
 import qupath.lib.images.servers.PixelCalibration;
-import qupath.opencv.ml.pixel.PixelClassifierTools;
 import qupath.lib.io.GsonTools;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.PathObjects;
@@ -65,6 +63,7 @@ import qupath.lib.regions.ImagePlane;
 import qupath.lib.regions.RegionRequest;
 import qupath.lib.roi.ROIs;
 import qupath.lib.roi.interfaces.ROI;
+import qupath.opencv.ml.pixel.PixelClassifierTools;
 
 /**
  * Workflow for surface perpendicularity analysis of fiber orientation relative
@@ -142,7 +141,8 @@ public class PPMPerpendicularityWorkflow {
                 runOnFXThread();
             } catch (Exception e) {
                 logger.error("Failed to run perpendicularity workflow", e);
-                Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
+                Dialogs.showErrorMessage(
+                        "Surface Perpendicularity Analysis",
                         DocumentationHelper.withDocLink("Error: " + e.getMessage(), "ppmPerpendicularity"));
             }
         });
@@ -151,14 +151,16 @@ public class PPMPerpendicularityWorkflow {
     private static void runOnFXThread() {
         QuPathGUI gui = QPEx.getQuPath();
         if (gui == null) {
-            Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
+            Dialogs.showErrorMessage(
+                    "Surface Perpendicularity Analysis",
                     DocumentationHelper.withDocLink("QuPath is not available.", "ppmPerpendicularity"));
             return;
         }
 
         ImageData<BufferedImage> imageData = gui.getImageData();
         if (imageData == null) {
-            Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
+            Dialogs.showErrorMessage(
+                    "Surface Perpendicularity Analysis",
                     DocumentationHelper.withDocLink("No image is open.", "ppmPerpendicularity"));
             return;
         }
@@ -199,12 +201,14 @@ public class PPMPerpendicularityWorkflow {
             try {
                 pixelSizeUm = Double.parseDouble(input.trim());
             } catch (NumberFormatException e) {
-                Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
+                Dialogs.showErrorMessage(
+                        "Surface Perpendicularity Analysis",
                         DocumentationHelper.withDocLink("Invalid pixel size: " + input, "ppmPerpendicularity"));
                 return;
             }
             if (pixelSizeUm <= 0) {
-                Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
+                Dialogs.showErrorMessage(
+                        "Surface Perpendicularity Analysis",
                         DocumentationHelper.withDocLink("Pixel size must be positive.", "ppmPerpendicularity"));
                 return;
             }
@@ -334,11 +338,10 @@ public class PPMPerpendicularityWorkflow {
         Spinner<Double> birefSpinner =
                 new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 1000, getBirefThreshold(), 10));
         birefSpinner.setEditable(true);
-        Tooltip birefTip = new Tooltip(
-                "Minimum birefringence image intensity for a pixel to be\n"
-                        + "considered PPM-positive (collagen). Pixels below this\n"
-                        + "value are excluded from analysis. Only applies when a\n"
-                        + "birefringence sibling image is found.");
+        Tooltip birefTip = new Tooltip("Minimum birefringence image intensity for a pixel to be\n"
+                + "considered PPM-positive (collagen). Pixels below this\n"
+                + "value are excluded from analysis. Only applies when a\n"
+                + "birefringence sibling image is found.");
         birefTip.setShowDelay(Duration.millis(400));
         birefSpinner.setTooltip(birefTip);
         grid.add(birefSpinner, 1, row);
@@ -346,12 +349,11 @@ public class PPMPerpendicularityWorkflow {
 
         Label satLabel = new Label("HSV saturation threshold:");
         grid.add(satLabel, 0, row);
-        Spinner<Double> satSpinner =
-                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 1, PPMPreferences.getSaturationThreshold(), 0.05));
+        Spinner<Double> satSpinner = new Spinner<>(
+                new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 1, PPMPreferences.getSaturationThreshold(), 0.05));
         satSpinner.setEditable(true);
-        Tooltip satTip = new Tooltip(
-                "Minimum HSV saturation (0-1) for a pixel to have a\n"
-                        + "meaningful hue/orientation. Filters out grayscale pixels.");
+        Tooltip satTip = new Tooltip("Minimum HSV saturation (0-1) for a pixel to have a\n"
+                + "meaningful hue/orientation. Filters out grayscale pixels.");
         satTip.setShowDelay(Duration.millis(400));
         satSpinner.setTooltip(satTip);
         grid.add(satSpinner, 1, row);
@@ -359,12 +361,11 @@ public class PPMPerpendicularityWorkflow {
 
         Label valLabel = new Label("HSV value threshold:");
         grid.add(valLabel, 0, row);
-        Spinner<Double> valSpinner =
-                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 1, PPMPreferences.getValueThreshold(), 0.05));
+        Spinner<Double> valSpinner = new Spinner<>(
+                new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 1, PPMPreferences.getValueThreshold(), 0.05));
         valSpinner.setEditable(true);
         Tooltip valTip = new Tooltip(
-                "Minimum HSV brightness (0-1) for a pixel to be included.\n"
-                        + "Filters out dark/shadow pixels.");
+                "Minimum HSV brightness (0-1) for a pixel to be included.\n" + "Filters out dark/shadow pixels.");
         valTip.setShowDelay(Duration.millis(400));
         valSpinner.setTooltip(valTip);
         grid.add(valSpinner, 1, row);
@@ -387,10 +388,9 @@ public class PPMPerpendicularityWorkflow {
         }
         classifierChoice.getItems().addAll(classifierNames);
         classifierChoice.setValue(classifierNames.get(0));
-        Tooltip classifierTip = new Tooltip(
-                "Select a pixel classifier or thresholder from the project.\n"
-                        + "The classifier's positive/foreground class will be used\n"
-                        + "as the analysis mask instead of the birefringence threshold.");
+        Tooltip classifierTip = new Tooltip("Select a pixel classifier or thresholder from the project.\n"
+                + "The classifier's positive/foreground class will be used\n"
+                + "as the analysis mask instead of the birefringence threshold.");
         classifierTip.setShowDelay(Duration.millis(400));
         classifierChoice.setTooltip(classifierTip);
         grid.add(classifierChoice, 1, row);
@@ -472,8 +472,7 @@ public class PPMPerpendicularityWorkflow {
                 Dialogs.showErrorMessage(
                         "Surface Perpendicularity Analysis",
                         DocumentationHelper.withDocLink(
-                                "No annotations found with class '" + selectedClass + "'.",
-                                "ppmPerpendicularity"));
+                                "No annotations found with class '" + selectedClass + "'.", "ppmPerpendicularity"));
                 return;
             }
 
@@ -518,6 +517,9 @@ public class PPMPerpendicularityWorkflow {
 
             CompletableFuture.runAsync(() -> {
                 try {
+                    // Ensure Appose PPM environment is initialized
+                    ensureEnvironmentReady();
+
                     List<PathObject> allTacsPolylines = new ArrayList<>();
 
                     for (int i = 0; i < matchingAnnotations.size(); i++) {
@@ -671,23 +673,21 @@ public class PPMPerpendicularityWorkflow {
         RegionRequest request =
                 RegionRequest.createInstance(sumServer.getPath(), 1.0, expandedX, expandedY, expandedW, expandedH);
 
-        Path tempDir = Files.createTempDirectory("ppm_perp_");
+        // Read sum region and convert to NDArray
+        BufferedImage sumRegion = sumServer.readRegion(request);
+        NDArray sumNDArray = null;
+        NDArray birefNDArray = null;
+        NDArray foregroundNDArray = null;
 
         try {
-            // Write sum region
-            BufferedImage sumRegion = sumServer.readRegion(request);
-            Path sumPath = tempDir.resolve("sum_region.tif");
-            ImageIO.write(sumRegion, "TIFF", sumPath.toFile());
-
-            Path birefPath = null;
-            Path foregroundMaskPath = null;
+            sumNDArray = bufferedImageToRGBNDArray(sumRegion);
 
             if (classifier != null) {
                 // Pixel classifier mode: generate binary foreground mask
-                foregroundMaskPath = generateClassifierMask(
-                        imageData, classifier, expandedX, expandedY, expandedW, expandedH, tempDir);
+                BufferedImage maskImage =
+                        generateClassifierMaskImage(imageData, classifier, expandedX, expandedY, expandedW, expandedH);
+                foregroundNDArray = bufferedImageToGrayNDArray(maskImage);
             } else if (analysisSet != null && analysisSet.hasBirefImage()) {
-                // Intensity threshold mode: write biref region
                 try {
                     @SuppressWarnings("unchecked")
                     ImageData<BufferedImage> birefData =
@@ -696,101 +696,101 @@ public class PPMPerpendicularityWorkflow {
                     RegionRequest birefRequest = RegionRequest.createInstance(
                             birefServer.getPath(), 1.0, expandedX, expandedY, expandedW, expandedH);
                     BufferedImage birefRegion = birefServer.readRegion(birefRequest);
-                    birefPath = tempDir.resolve("biref_region.tif");
-                    ImageIO.write(birefRegion, "TIFF", birefPath.toFile());
+                    birefNDArray = bufferedImageToGrayNDArray(birefRegion);
                     birefServer.close();
                 } catch (Exception e) {
                     logger.warn("Could not read biref sibling: {}", e.getMessage());
                 }
             }
 
-            // Export ROI as GeoJSON (coordinates relative to expanded region)
-            Path geojsonPath = tempDir.resolve("boundary.geojson");
-            exportRoiAsGeoJSON(roi, expandedX, expandedY, geojsonPath);
+            // Export ROI as GeoJSON string (coordinates relative to expanded region)
+            String geojsonString = exportRoiAsGeoJSONString(roi, expandedX, expandedY);
 
-            // Call Python
-            JsonObject result = callPythonPerpendicularity(
-                    sumPath,
-                    calibrationPath,
-                    geojsonPath,
-                    birefPath,
-                    foregroundMaskPath,
-                    pixelSizeUm,
-                    dilationUm,
-                    zoneMode,
-                    tacsThreshold,
-                    fillHoles,
-                    birefThreshold,
-                    saturationThreshold,
-                    valueThreshold,
-                    outputDir);
+            // Build Appose task inputs
+            Map<String, Object> inputs = new HashMap<>();
+            inputs.put("sum_image", sumNDArray);
+            inputs.put("calibration_path", calibrationPath);
+            inputs.put("geojson_boundary", geojsonString);
+            inputs.put("pixel_size_um", pixelSizeUm);
+            inputs.put("dilation_um", dilationUm);
+            inputs.put("zone_mode", zoneMode);
+            inputs.put("tacs_threshold", tacsThreshold);
+            inputs.put("fill_holes", fillHoles);
+            inputs.put("saturation_threshold", saturationThreshold);
+            inputs.put("value_threshold", valueThreshold);
+            inputs.put("image_width", expandedW);
+            inputs.put("image_height", expandedH);
+
+            if (birefNDArray != null) {
+                inputs.put("biref_image", birefNDArray);
+                inputs.put("biref_threshold", birefThreshold);
+            }
+            if (foregroundNDArray != null) {
+                inputs.put("foreground_mask", foregroundNDArray);
+            }
+            if (outputDir != null) {
+                inputs.put("output_dir", outputDir.toString());
+            }
+
+            logger.info("Running perpendicularity via Appose ({} inputs)", inputs.size());
+
+            Task task = ApposePPMService.getInstance().runTask("run_perpendicularity", inputs);
+            String json = (String) task.outputs.get("result_json");
+
+            Gson gson = new Gson();
+            JsonObject result = gson.fromJson(json, JsonObject.class);
+
+            if (result.has("error") && !result.get("error").isJsonNull()) {
+                throw new RuntimeException(
+                        "Python error: " + result.get("error").getAsString());
+            }
 
             return new AnnotationResult(result, expandedX, expandedY);
 
         } finally {
-            // Clean up temp files
-            try {
-                Files.walk(tempDir)
-                        .sorted(Comparator.reverseOrder())
-                        .map(Path::toFile)
-                        .forEach(File::delete);
-            } catch (Exception e) {
-                logger.debug("Could not clean up temp dir: {}", e.getMessage());
-            }
+            if (sumNDArray != null) sumNDArray.close();
+            if (birefNDArray != null) birefNDArray.close();
+            if (foregroundNDArray != null) foregroundNDArray.close();
         }
     }
 
     /**
-     * Applies a pixel classifier to a region and writes the result as a binary
-     * mask TIFF (255 = foreground, 0 = background).
-     *
-     * <p>Any non-zero classification label is treated as foreground. This works
-     * with both trained pixel classifiers and simple thresholders created in
-     * QuPath's "Create thresholder" dialog.</p>
+     * Applies a pixel classifier to a region and returns a binary mask BufferedImage
+     * (255 = foreground, 0 = background).
      */
-    private static Path generateClassifierMask(
-            ImageData<BufferedImage> imageData,
-            PixelClassifier classifier,
-            int x, int y, int w, int h,
-            Path tempDir)
+    private static BufferedImage generateClassifierMaskImage(
+            ImageData<BufferedImage> imageData, PixelClassifier classifier, int x, int y, int w, int h)
             throws Exception {
 
         try (ImageServer<BufferedImage> classServer =
-                     PixelClassifierTools.createPixelClassificationServer(imageData, classifier)) {
+                PixelClassifierTools.createPixelClassificationServer(imageData, classifier)) {
 
-            RegionRequest classRequest = RegionRequest.createInstance(
-                    classServer.getPath(), 1.0, x, y, w, h);
+            RegionRequest classRequest = RegionRequest.createInstance(classServer.getPath(), 1.0, x, y, w, h);
             BufferedImage classImage = classServer.readRegion(classRequest);
 
-            // Convert to binary mask: any non-zero class index = foreground (255)
             int maskW = classImage.getWidth();
             int maskH = classImage.getHeight();
             BufferedImage mask = new BufferedImage(maskW, maskH, BufferedImage.TYPE_BYTE_GRAY);
             Raster classRaster = classImage.getRaster();
 
+            int fgCount = 0;
             for (int py = 0; py < maskH; py++) {
                 for (int px = 0; px < maskW; px++) {
                     int classIndex = classRaster.getSample(px, py, 0);
                     if (classIndex > 0) {
                         mask.getRaster().setSample(px, py, 0, 255);
+                        fgCount++;
                     }
                 }
             }
-
-            Path maskPath = tempDir.resolve("foreground_mask.tif");
-            ImageIO.write(mask, "TIFF", maskPath.toFile());
-
-            int fgCount = 0;
-            for (int py = 0; py < maskH; py++) {
-                for (int px = 0; px < maskW; px++) {
-                    if (mask.getRaster().getSample(px, py, 0) > 0) fgCount++;
-                }
-            }
-            logger.info("Classifier mask: {}x{}, {} foreground pixels ({} pct)",
-                    maskW, maskH, fgCount,
+            logger.info(
+                    "Classifier mask: {}x{}, {} foreground pixels ({} pct)",
+                    maskW,
+                    maskH,
+                    fgCount,
                     maskW * maskH > 0 ? String.format("%.1f", 100.0 * fgCount / (maskW * maskH)) : "0");
 
-            return maskPath;
+            return mask;
         }
     }
 
@@ -953,118 +953,73 @@ public class PPMPerpendicularityWorkflow {
         }
     }
 
-    private static JsonObject callPythonPerpendicularity(
-            Path sumPath,
-            String calibrationPath,
-            Path geojsonPath,
-            Path birefPath,
-            Path foregroundMaskPath,
-            double pixelSizeUm,
-            double dilationUm,
-            String zoneMode,
-            double tacsThreshold,
-            boolean fillHoles,
-            double birefThreshold,
-            double saturationThreshold,
-            double valueThreshold,
-            Path outputDir)
-            throws Exception {
-
-        List<String> command = new ArrayList<>();
-        command.add("python");
-        command.add("-m");
-        command.add("ppm_library.analysis.cli");
-        command.add("--mode");
-        command.add("perpendicularity");
-        command.add("--sum");
-        command.add(sumPath.toString());
-        command.add("--calibration");
-        command.add(calibrationPath);
-        command.add("--boundary");
-        command.add(geojsonPath.toString());
-        command.add("--pixel-size-um");
-        command.add(String.valueOf(pixelSizeUm));
-        command.add("--dilation-um");
-        command.add(String.valueOf(dilationUm));
-        command.add("--zone-mode");
-        command.add(zoneMode);
-        command.add("--tacs-threshold");
-        command.add(String.valueOf(tacsThreshold));
-        command.add("--saturation-threshold");
-        command.add(String.valueOf(saturationThreshold));
-        command.add("--value-threshold");
-        command.add(String.valueOf(valueThreshold));
-
-        if (!fillHoles) {
-            command.add("--no-fill-holes");
-        }
-
-        if (foregroundMaskPath != null) {
-            // Pixel classifier mode: pass pre-computed foreground mask
-            command.add("--foreground-mask");
-            command.add(foregroundMaskPath.toString());
-        } else if (birefPath != null) {
-            // Intensity threshold mode: pass biref image for thresholding
-            command.add("--biref");
-            command.add(birefPath.toString());
-            command.add("--biref-threshold");
-            command.add(String.valueOf(birefThreshold));
-        }
-
-        if (outputDir != null) {
-            command.add("--output-dir");
-            command.add(outputDir.toString());
-        }
-
-        logger.info("Running perpendicularity analysis: {}", String.join(" ", command));
-
-        ProcessBuilder pb = new ProcessBuilder(command);
-        pb.redirectErrorStream(false);
-
-        Process process = pb.start();
-
-        StringBuilder stdout = new StringBuilder();
-        try (BufferedReader reader =
-                new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                stdout.append(line);
+    /**
+     * Converts an RGB BufferedImage to an Appose NDArray (H, W, 3) uint8.
+     */
+    static NDArray bufferedImageToRGBNDArray(BufferedImage img) {
+        int h = img.getHeight();
+        int w = img.getWidth();
+        NDArray.Shape shape = new NDArray.Shape(NDArray.Shape.Order.C_ORDER, h, w, 3);
+        NDArray ndArray = new NDArray(NDArray.DType.UINT8, shape);
+        java.nio.ByteBuffer buf = ndArray.buffer();
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int pixel = img.getRGB(x, y);
+                buf.put((byte) ((pixel >> 16) & 0xFF));
+                buf.put((byte) ((pixel >> 8) & 0xFF));
+                buf.put((byte) (pixel & 0xFF));
             }
         }
+        buf.flip();
+        return ndArray;
+    }
 
-        StringBuilder stderr = new StringBuilder();
-        try (BufferedReader reader =
-                new BufferedReader(new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                stderr.append(line).append("\n");
+    /**
+     * Converts a grayscale BufferedImage to an Appose NDArray (H, W) uint8.
+     */
+    static NDArray bufferedImageToGrayNDArray(BufferedImage img) {
+        int h = img.getHeight();
+        int w = img.getWidth();
+        NDArray.Shape shape = new NDArray.Shape(NDArray.Shape.Order.C_ORDER, h, w);
+        NDArray ndArray = new NDArray(NDArray.DType.UINT8, shape);
+        java.nio.ByteBuffer buf = ndArray.buffer();
+        Raster raster = img.getRaster();
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                buf.put((byte) raster.getSample(x, y, 0));
             }
         }
+        buf.flip();
+        return ndArray;
+    }
 
-        int exitCode = process.waitFor();
+    /**
+     * Exports an ROI as a GeoJSON string with coordinates adjusted relative to an offset.
+     */
+    static String exportRoiAsGeoJSONString(ROI roi, int offsetX, int offsetY) {
+        Gson gsonTools = GsonTools.getInstance();
+        PathObject tempObj = PathObjects.createAnnotationObject(roi);
+        String json = gsonTools.toJson(tempObj);
+        JsonObject feature = new Gson().fromJson(json, JsonObject.class);
 
-        if (stderr.length() > 0) {
-            logger.debug("Python stderr: {}", stderr.toString().trim());
+        JsonObject geometry = feature.getAsJsonObject("geometry");
+        if (geometry != null) {
+            adjustGeoJSONCoordinates(geometry, -offsetX, -offsetY);
         }
 
-        if (exitCode != 0) {
-            throw new RuntimeException("Python analysis failed (exit code " + exitCode + "): "
-                    + stderr.toString().trim());
+        return new Gson().toJson(feature);
+    }
+
+    /**
+     * Ensures the Appose PPM environment is ready, initializing if needed.
+     * Shows a progress dialog on first use.
+     */
+    private static void ensureEnvironmentReady() throws IOException {
+        ApposePPMService service = ApposePPMService.getInstance();
+        if (!service.isAvailable()) {
+            logger.info("PPM analysis environment not ready, initializing...");
+            service.initialize(msg -> logger.info("PPM setup: {}", msg));
         }
-
-        String jsonStr = stdout.toString().trim();
-        if (jsonStr.isEmpty()) {
-            throw new RuntimeException("Python analysis returned empty output");
-        }
-
-        Gson gson = new Gson();
-        JsonObject result = gson.fromJson(jsonStr, JsonObject.class);
-
-        if (result.has("error") && !result.get("error").isJsonNull()) {
-            throw new RuntimeException("Python error: " + result.get("error").getAsString());
-        }
-
-        return result;
     }
 
     private static String findCalibrationPath(ProjectImageEntry<BufferedImage> entry, Project<BufferedImage> project) {

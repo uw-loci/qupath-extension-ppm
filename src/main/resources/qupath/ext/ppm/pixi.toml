@@ -1,0 +1,22 @@
+[workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64", "win-64"]
+
+[dependencies]
+python = "3.11.*"
+pip = ">=23.0"
+appose = ">=0.7.2"
+numpy = ">=1.24.0,<2.0"
+scipy = ">=1.11.0"
+scikit-image = ">=0.21.0"
+matplotlib-base = ">=3.7.0"
+pillow = ">=10.0.0"
+
+[pypi-dependencies]
+tifffile = ">=2023.7.0"
+imagecodecs = ">=2023.7.0"
+opencv-python = ">=4.8.0"
+
+# ppm-library installed separately via pip after pixi environment is built
+# (see ApposePPMService.java). Pixi's PyPI resolver panics on git-based
+# dependencies, so this is handled outside pixi to avoid the resolver entirely.

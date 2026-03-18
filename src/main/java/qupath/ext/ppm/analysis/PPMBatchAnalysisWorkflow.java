@@ -3,15 +3,11 @@ package qupath.ext.ppm.analysis;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import java.awt.image.BufferedImage;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -26,10 +22,12 @@ import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
-import javax.imageio.ImageIO;
+import org.apposed.appose.NDArray;
+import org.apposed.appose.Service.Task;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.ppm.PPMPreferences;
+import qupath.ext.ppm.service.ApposePPMService;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager.PPMAnalysisSet;
@@ -51,6 +49,9 @@ import qupath.lib.roi.interfaces.ROI;
  * presents a selection UI, and runs polarity and/or perpendicularity analysis
  * on all annotations, storing results as measurements and exporting CSV.
  *
+ * <p>Analysis is performed via Appose (ppm_library), using a persistent Python
+ * process for fast subsequent calls without per-annotation subprocess overhead.</p>
+ *
  * @author Mike Nelson
  * @since 1.0
  */
@@ -58,7 +59,6 @@ public class PPMBatchAnalysisWorkflow {
 
     private static final Logger logger = LoggerFactory.getLogger(PPMBatchAnalysisWorkflow.class);
 
-    // Analysis parameters now read from PPMPreferences (configurable in QuPath Preferences)
     private static double getBirefThreshold() {
         return PPMPreferences.getBirefringenceThreshold();
     }
@@ -80,7 +80,8 @@ public class PPMBatchAnalysisWorkflow {
                 runOnFXThread();
             } catch (Exception e) {
                 logger.error("Failed to run batch analysis workflow", e);
-                Dialogs.showErrorMessage("Batch PPM Analysis",
+                Dialogs.showErrorMessage(
+                        "Batch PPM Analysis",
                         DocumentationHelper.withDocLink("Error: " + e.getMessage(), "ppmBatchAnalysis"));
             }
         });
@@ -93,7 +94,8 @@ public class PPMBatchAnalysisWorkflow {
     private static void runOnFXThread() {
         QuPathGUI gui = QPEx.getQuPath();
         if (gui == null) {
-            Dialogs.showErrorMessage("Batch PPM Analysis",
+            Dialogs.showErrorMessage(
+                    "Batch PPM Analysis",
                     DocumentationHelper.withDocLink("QuPath is not available.", "ppmBatchAnalysis"));
             return;
         }
@@ -107,7 +109,6 @@ public class PPMBatchAnalysisWorkflow {
             return;
         }
 
-        // Discover all PPM analysis sets
         List<PPMBatchAnalysisPanel.AnalysisSetItem> discoveredSets = discoverAnalysisSets(project);
 
         if (discoveredSets.isEmpty()) {
@@ -120,24 +121,14 @@ public class PPMBatchAnalysisWorkflow {
             return;
         }
 
-        // Collect all annotation classes across all sum images
         List<String> allClasses = collectAnnotationClasses(project, discoveredSets);
 
-        // Show configuration panel
         showConfigPanel(gui, project, discoveredSets, allClasses);
     }
 
-    /**
-     * Discovers all PPM analysis sets in the project.
-     *
-     * <p>Groups images by (image_collection, annotation_name, sample_name),
-     * identifies sum/biref/angle images within each group, and checks for
-     * calibration availability.</p>
-     */
     @SuppressWarnings("unchecked")
     private static List<PPMBatchAnalysisPanel.AnalysisSetItem> discoverAnalysisSets(Project<BufferedImage> project) {
 
-        // Group PPM images by (collection, annotation_name, sample_name)
         Map<String, List<ProjectImageEntry<BufferedImage>>> groups = new LinkedHashMap<>();
 
         for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
@@ -159,7 +150,6 @@ public class PPMBatchAnalysisWorkflow {
         for (Map.Entry<String, List<ProjectImageEntry<BufferedImage>>> groupEntry : groups.entrySet()) {
             List<ProjectImageEntry<BufferedImage>> members = groupEntry.getValue();
 
-            // Find sum image and calibration
             ProjectImageEntry<BufferedImage> sumImage = null;
             boolean hasBiref = false;
             String calibrationPath = null;
@@ -180,7 +170,6 @@ public class PPMBatchAnalysisWorkflow {
                 }
             }
 
-            // Fall back to active calibration
             if (calibrationPath == null) {
                 String activeCal = PPMPreferences.getActiveCalibrationPath();
                 if (activeCal != null && !activeCal.isEmpty()) {
@@ -188,7 +177,6 @@ public class PPMBatchAnalysisWorkflow {
                 }
             }
 
-            // Must have sum + calibration to qualify
             if (sumImage == null || calibrationPath == null) {
                 logger.debug(
                         "Skipping group {} - sum={}, cal={}",
@@ -198,7 +186,6 @@ public class PPMBatchAnalysisWorkflow {
                 continue;
             }
 
-            // Count annotations on the sum image
             int annotationCount = 0;
             try {
                 ImageData<BufferedImage> imgData = (ImageData<BufferedImage>) sumImage.readImageData();
@@ -235,9 +222,6 @@ public class PPMBatchAnalysisWorkflow {
         return items;
     }
 
-    /**
-     * Collects all annotation classes from the sum images of discovered sets.
-     */
     @SuppressWarnings("unchecked")
     private static List<String> collectAnnotationClasses(
             Project<BufferedImage> project, List<PPMBatchAnalysisPanel.AnalysisSetItem> sets) {
@@ -245,7 +229,6 @@ public class PPMBatchAnalysisWorkflow {
         Set<String> classes = new LinkedHashSet<>();
 
         for (PPMBatchAnalysisPanel.AnalysisSetItem item : sets) {
-            // Find the sum image entry
             for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
                 if (entry.getImageName().equals(item.imageName)) {
                     try {
@@ -288,12 +271,14 @@ public class PPMBatchAnalysisWorkflow {
         panel.setOnRun(() -> {
             List<PPMBatchAnalysisPanel.AnalysisSetItem> selected = panel.getSelectedItems();
             if (selected.isEmpty()) {
-                Dialogs.showErrorMessage("Batch PPM Analysis",
+                Dialogs.showErrorMessage(
+                        "Batch PPM Analysis",
                         DocumentationHelper.withDocLink("No analysis sets selected.", "ppmBatchAnalysis"));
                 return;
             }
             if (!panel.isPolaritySelected() && !panel.isPerpendicularitySelected()) {
-                Dialogs.showErrorMessage("Batch PPM Analysis",
+                Dialogs.showErrorMessage(
+                        "Batch PPM Analysis",
                         DocumentationHelper.withDocLink("Select at least one analysis type.", "ppmBatchAnalysis"));
                 return;
             }
@@ -310,7 +295,6 @@ public class PPMBatchAnalysisWorkflow {
 
             dialog.close();
 
-            // Run in background
             cancelled.set(false);
             runBatchAnalysis(
                     gui,
@@ -354,7 +338,6 @@ public class PPMBatchAnalysisWorkflow {
             double tacsThreshold,
             boolean fillHoles) {
 
-        // Show progress
         Stage progressStage = new Stage();
         progressStage.setTitle("Batch PPM Analysis - Running");
         progressStage.initOwner(gui.getStage());
@@ -384,6 +367,26 @@ public class PPMBatchAnalysisWorkflow {
             int processedAnnotations = 0;
             int errors = 0;
 
+            try {
+                // Ensure Appose PPM environment is initialized before batch
+                ApposePPMService service = ApposePPMService.getInstance();
+                if (!service.isAvailable()) {
+                    updateProgress(progressLabel, progressBar, "Initializing PPM analysis environment...", -1);
+                    service.initialize(msg -> updateProgress(progressLabel, progressBar, msg, -1));
+                }
+            } catch (IOException e) {
+                logger.error("Failed to initialize PPM environment: {}", e.getMessage(), e);
+                Platform.runLater(() -> {
+                    progressStage.close();
+                    Dialogs.showErrorMessage(
+                            "Batch PPM Analysis",
+                            DocumentationHelper.withDocLink(
+                                    "Failed to initialize PPM analysis environment: " + e.getMessage(),
+                                    "ppmBatchAnalysis"));
+                });
+                return;
+            }
+
             for (int setIdx = 0; setIdx < totalSets; setIdx++) {
                 if (cancelled.get()) break;
 
@@ -396,7 +399,6 @@ public class PPMBatchAnalysisWorkflow {
                         String.format("Set %d/%d: %s", setNum, totalSets, item.imageName),
                         (double) setIdx / totalSets);
 
-                // Find the sum image entry
                 ProjectImageEntry<BufferedImage> sumEntry = null;
                 for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
                     if (entry.getImageName().equals(item.imageName)) {
@@ -414,14 +416,11 @@ public class PPMBatchAnalysisWorkflow {
                     ImageData<BufferedImage> imageData = (ImageData<BufferedImage>) sumEntry.readImageData();
                     ImageServer<BufferedImage> sumServer = imageData.getServer();
 
-                    // Get pixel size
                     PixelCalibration pixelCal = sumServer.getPixelCalibration();
                     double pixelSizeUm = pixelCal.hasPixelSizeMicrons() ? pixelCal.getAveragedPixelSizeMicrons() : 1.0;
 
-                    // Find biref server if available
                     PPMAnalysisSet analysisSet = ImageMetadataManager.findPPMAnalysisSet(sumEntry, project);
 
-                    // Get annotations to process
                     Collection<PathObject> annotations =
                             imageData.getHierarchy().getAnnotationObjects();
 
@@ -536,7 +535,6 @@ public class PPMBatchAnalysisWorkflow {
                         }
                     }
 
-                    // Save measurements back to project
                     sumEntry.saveImageData(imageData);
 
                 } catch (Exception e) {
@@ -589,7 +587,7 @@ public class PPMBatchAnalysisWorkflow {
     }
 
     // ========================================================================
-    // Per-annotation analysis (reuses CLI patterns from Phase 2b/3)
+    // Per-annotation analysis via Appose
     // ========================================================================
 
     private static JsonObject runPolarityForAnnotation(
@@ -603,47 +601,51 @@ public class PPMBatchAnalysisWorkflow {
 
         RegionRequest request = RegionRequest.createInstance(sumServer.getPath(), 1.0, x, y, w, h);
 
-        Path tempDir = Files.createTempDirectory("ppm_batch_pol_");
+        NDArray sumNDArray = null;
+        NDArray birefNDArray = null;
+        NDArray roiNDArray = null;
+
         try {
             BufferedImage sumRegion = sumServer.readRegion(request);
-            Path sumPath = tempDir.resolve("sum_region.tif");
-            ImageIO.write(sumRegion, "TIFF", sumPath.toFile());
+            sumNDArray = PPMPerpendicularityWorkflow.bufferedImageToRGBNDArray(sumRegion);
 
-            // Write biref if available
-            Path birefPath = writeBirefRegion(analysisSet, x, y, w, h, tempDir);
+            birefNDArray = readBirefNDArray(analysisSet, x, y, w, h);
 
-            // Write ROI mask
-            Path roiMaskPath = tempDir.resolve("roi_mask.tif");
-            writeROIMask(roi, x, y, w, h, roiMaskPath);
+            // Create ROI mask
+            roiNDArray = PPMPolarityPlotWorkflow.createROIMaskNDArray(roi, x, y, w, h);
 
-            // Build command
-            List<String> command = new ArrayList<>();
-            command.add("python");
-            command.add("-m");
-            command.add("ppm_library.analysis.cli");
-            command.add("--sum");
-            command.add(sumPath.toString());
-            command.add("--calibration");
-            command.add(calibrationPath);
-            command.add("--bins");
-            command.add(String.valueOf(getHistogramBins()));
-            command.add("--roi-mask");
-            command.add(roiMaskPath.toString());
-            command.add("--saturation-threshold");
-            command.add(String.valueOf(PPMPreferences.getSaturationThreshold()));
-            command.add("--value-threshold");
-            command.add(String.valueOf(PPMPreferences.getValueThreshold()));
+            Map<String, Object> inputs = new HashMap<>();
+            inputs.put("sum_image", sumNDArray);
+            inputs.put("calibration_path", calibrationPath);
+            inputs.put("bins", getHistogramBins());
+            inputs.put("saturation_threshold", PPMPreferences.getSaturationThreshold());
+            inputs.put("value_threshold", PPMPreferences.getValueThreshold());
 
-            if (birefPath != null) {
-                command.add("--biref");
-                command.add(birefPath.toString());
-                command.add("--biref-threshold");
-                command.add(String.valueOf(getBirefThreshold()));
+            if (birefNDArray != null) {
+                inputs.put("biref_image", birefNDArray);
+                inputs.put("biref_threshold", getBirefThreshold());
             }
 
-            return callPython(command);
+            if (roiNDArray != null) {
+                inputs.put("roi_mask", roiNDArray);
+            }
+
+            Task task = ApposePPMService.getInstance().runTask("run_polarity", inputs);
+            String json = (String) task.outputs.get("result_json");
+
+            Gson gson = new Gson();
+            JsonObject result = gson.fromJson(json, JsonObject.class);
+
+            if (result.has("error") && !result.get("error").isJsonNull()) {
+                throw new RuntimeException(
+                        "Python error: " + result.get("error").getAsString());
+            }
+
+            return result;
         } finally {
-            cleanupTempDir(tempDir);
+            if (sumNDArray != null) sumNDArray.close();
+            if (birefNDArray != null) birefNDArray.close();
+            if (roiNDArray != null) roiNDArray.close();
         }
     }
 
@@ -675,57 +677,52 @@ public class PPMBatchAnalysisWorkflow {
         RegionRequest request =
                 RegionRequest.createInstance(sumServer.getPath(), 1.0, expandedX, expandedY, expandedW, expandedH);
 
-        Path tempDir = Files.createTempDirectory("ppm_batch_perp_");
+        NDArray sumNDArray = null;
+        NDArray birefNDArray = null;
+
         try {
             BufferedImage sumRegion = sumServer.readRegion(request);
-            Path sumPath = tempDir.resolve("sum_region.tif");
-            ImageIO.write(sumRegion, "TIFF", sumPath.toFile());
+            sumNDArray = PPMPerpendicularityWorkflow.bufferedImageToRGBNDArray(sumRegion);
 
-            Path birefPath = writeBirefRegion(analysisSet, expandedX, expandedY, expandedW, expandedH, tempDir);
+            birefNDArray = readBirefNDArray(analysisSet, expandedX, expandedY, expandedW, expandedH);
 
-            // Export ROI as GeoJSON with offset
-            Path geojsonPath = tempDir.resolve("boundary.geojson");
-            PPMPerpendicularityWorkflow.exportRoiAsGeoJSON(roi, expandedX, expandedY, geojsonPath);
+            // Export ROI as GeoJSON string with offset
+            String geojsonString = PPMPerpendicularityWorkflow.exportRoiAsGeoJSONString(roi, expandedX, expandedY);
 
-            List<String> command = new ArrayList<>();
-            command.add("python");
-            command.add("-m");
-            command.add("ppm_library.analysis.cli");
-            command.add("--mode");
-            command.add("perpendicularity");
-            command.add("--sum");
-            command.add(sumPath.toString());
-            command.add("--calibration");
-            command.add(calibrationPath);
-            command.add("--boundary");
-            command.add(geojsonPath.toString());
-            command.add("--pixel-size-um");
-            command.add(String.valueOf(pixelSizeUm));
-            command.add("--dilation-um");
-            command.add(String.valueOf(dilationUm));
-            command.add("--zone-mode");
-            command.add(zoneMode);
-            command.add("--tacs-threshold");
-            command.add(String.valueOf(tacsThreshold));
-            command.add("--saturation-threshold");
-            command.add(String.valueOf(PPMPreferences.getSaturationThreshold()));
-            command.add("--value-threshold");
-            command.add(String.valueOf(PPMPreferences.getValueThreshold()));
+            Map<String, Object> inputs = new HashMap<>();
+            inputs.put("sum_image", sumNDArray);
+            inputs.put("calibration_path", calibrationPath);
+            inputs.put("geojson_boundary", geojsonString);
+            inputs.put("pixel_size_um", pixelSizeUm);
+            inputs.put("dilation_um", dilationUm);
+            inputs.put("zone_mode", zoneMode);
+            inputs.put("tacs_threshold", tacsThreshold);
+            inputs.put("fill_holes", fillHoles);
+            inputs.put("saturation_threshold", PPMPreferences.getSaturationThreshold());
+            inputs.put("value_threshold", PPMPreferences.getValueThreshold());
+            inputs.put("image_width", expandedW);
+            inputs.put("image_height", expandedH);
 
-            if (!fillHoles) {
-                command.add("--no-fill-holes");
+            if (birefNDArray != null) {
+                inputs.put("biref_image", birefNDArray);
+                inputs.put("biref_threshold", getBirefThreshold());
             }
 
-            if (birefPath != null) {
-                command.add("--biref");
-                command.add(birefPath.toString());
-                command.add("--biref-threshold");
-                command.add(String.valueOf(getBirefThreshold()));
+            Task task = ApposePPMService.getInstance().runTask("run_perpendicularity", inputs);
+            String json = (String) task.outputs.get("result_json");
+
+            Gson gson = new Gson();
+            JsonObject result = gson.fromJson(json, JsonObject.class);
+
+            if (result.has("error") && !result.get("error").isJsonNull()) {
+                throw new RuntimeException(
+                        "Python error: " + result.get("error").getAsString());
             }
 
-            return callPython(command);
+            return result;
         } finally {
-            cleanupTempDir(tempDir);
+            if (sumNDArray != null) sumNDArray.close();
+            if (birefNDArray != null) birefNDArray.close();
         }
     }
 
@@ -733,8 +730,11 @@ public class PPMBatchAnalysisWorkflow {
     // Shared helpers
     // ========================================================================
 
+    /**
+     * Reads a birefringence region as an NDArray, or returns null if unavailable.
+     */
     @SuppressWarnings("unchecked")
-    private static Path writeBirefRegion(PPMAnalysisSet analysisSet, int x, int y, int w, int h, Path tempDir) {
+    private static NDArray readBirefNDArray(PPMAnalysisSet analysisSet, int x, int y, int w, int h) {
         if (analysisSet == null || !analysisSet.hasBirefImage()) return null;
 
         try {
@@ -742,88 +742,11 @@ public class PPMBatchAnalysisWorkflow {
             ImageServer<BufferedImage> birefServer = birefData.getServer();
             RegionRequest birefRequest = RegionRequest.createInstance(birefServer.getPath(), 1.0, x, y, w, h);
             BufferedImage birefRegion = birefServer.readRegion(birefRequest);
-            Path birefPath = tempDir.resolve("biref_region.tif");
-            ImageIO.write(birefRegion, "TIFF", birefPath.toFile());
             birefServer.close();
-            return birefPath;
+            return PPMPerpendicularityWorkflow.bufferedImageToGrayNDArray(birefRegion);
         } catch (Exception e) {
             logger.debug("Could not read biref region: {}", e.getMessage());
             return null;
-        }
-    }
-
-    private static void writeROIMask(ROI roi, int offsetX, int offsetY, int width, int height, Path outputPath)
-            throws Exception {
-        BufferedImage mask = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_GRAY);
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                if (roi.contains(offsetX + x + 0.5, offsetY + y + 0.5)) {
-                    mask.getRaster().setSample(x, y, 0, 255);
-                }
-            }
-        }
-        ImageIO.write(mask, "TIFF", outputPath.toFile());
-    }
-
-    private static JsonObject callPython(List<String> command) throws Exception {
-        logger.debug("Python: {}", String.join(" ", command));
-
-        ProcessBuilder pb = new ProcessBuilder(command);
-        pb.redirectErrorStream(false);
-        Process process = pb.start();
-
-        StringBuilder stdout = new StringBuilder();
-        try (BufferedReader reader =
-                new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                stdout.append(line);
-            }
-        }
-
-        StringBuilder stderr = new StringBuilder();
-        try (BufferedReader reader =
-                new BufferedReader(new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                stderr.append(line).append("\n");
-            }
-        }
-
-        int exitCode = process.waitFor();
-
-        if (stderr.length() > 0) {
-            logger.debug("Python stderr: {}", stderr.toString().trim());
-        }
-
-        if (exitCode != 0) {
-            throw new RuntimeException("Python failed (exit " + exitCode + "): "
-                    + stderr.toString().trim());
-        }
-
-        String jsonStr = stdout.toString().trim();
-        if (jsonStr.isEmpty()) {
-            throw new RuntimeException("Python returned empty output");
-        }
-
-        Gson gson = new Gson();
-        JsonObject result = gson.fromJson(jsonStr, JsonObject.class);
-
-        if (result.has("error") && !result.get("error").isJsonNull()) {
-            throw new RuntimeException("Python error: " + result.get("error").getAsString());
-        }
-
-        return result;
-    }
-
-    private static void cleanupTempDir(Path tempDir) {
-        try {
-            Files.walk(tempDir)
-                    .sorted(Comparator.reverseOrder())
-                    .map(Path::toFile)
-                    .forEach(File::delete);
-        } catch (Exception e) {
-            logger.debug("Could not clean up temp dir: {}", e.getMessage());
         }
     }
 

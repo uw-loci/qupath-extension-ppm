@@ -75,7 +75,9 @@ public class PolarizerCalibrationWorkflow {
                             logger.error("Error in polarizer calibration dialog", ex);
                             Platform.runLater(() -> Dialogs.showErrorMessage(
                                     "Calibration Error",
-                                    DocumentationHelper.withDocLink("Failed to show calibration dialog: " + ex.getMessage(), "polarizerCalibration")));
+                                    DocumentationHelper.withDocLink(
+                                            "Failed to show calibration dialog: " + ex.getMessage(),
+                                            "polarizerCalibration")));
                             return null;
                         });
 
@@ -83,7 +85,8 @@ public class PolarizerCalibrationWorkflow {
                 logger.error("Failed to start polarizer calibration workflow", e);
                 Dialogs.showErrorMessage(
                         "Calibration Error",
-                        DocumentationHelper.withDocLink("Failed to start polarizer calibration: " + e.getMessage(), "polarizerCalibration"));
+                        DocumentationHelper.withDocLink(
+                                "Failed to start polarizer calibration: " + e.getMessage(), "polarizerCalibration"));
             }
         });
     }
@@ -255,7 +258,9 @@ public class PolarizerCalibrationWorkflow {
                 if (output.isEmpty() || !outputDir.exists() || !outputDir.isDirectory()) {
                     Dialogs.showErrorMessage(
                             "Invalid Output Folder",
-                            DocumentationHelper.withDocLink("Please select a valid output folder for the calibration report.", "polarizerCalibration"));
+                            DocumentationHelper.withDocLink(
+                                    "Please select a valid output folder for the calibration report.",
+                                    "polarizerCalibration"));
                     event.consume();
                     return;
                 }
@@ -263,8 +268,10 @@ public class PolarizerCalibrationWorkflow {
                 double step = stepSizeSpinner.getValue();
 
                 if (step <= 0 || step > 10.0) {
-                    Dialogs.showErrorMessage("Invalid Step Size",
-                            DocumentationHelper.withDocLink("Step size must be between 0.5 and 10.0 degrees.", "polarizerCalibration"));
+                    Dialogs.showErrorMessage(
+                            "Invalid Step Size",
+                            DocumentationHelper.withDocLink(
+                                    "Step size must be between 0.5 and 10.0 degrees.", "polarizerCalibration"));
                     event.consume();
                     return;
                 }
@@ -344,7 +351,8 @@ public class PolarizerCalibrationWorkflow {
                         progressDialog.close();
                         Dialogs.showErrorMessage(
                                 "Polarizer Calibration Error",
-                                DocumentationHelper.withDocLink("Failed to execute calibration: " + ex.getMessage(), "polarizerCalibration"));
+                                DocumentationHelper.withDocLink(
+                                        "Failed to execute calibration: " + ex.getMessage(), "polarizerCalibration"));
                     });
                     return null;
                 });
@@ -466,8 +474,10 @@ public class PolarizerCalibrationWorkflow {
                         }
                     } catch (IOException e) {
                         logger.error("Failed to open report folder", e);
-                        Dialogs.showErrorMessage("Error",
-                                DocumentationHelper.withDocLink("Could not open folder: " + e.getMessage(), "polarizerCalibration"));
+                        Dialogs.showErrorMessage(
+                                "Error",
+                                DocumentationHelper.withDocLink(
+                                        "Could not open folder: " + e.getMessage(), "polarizerCalibration"));
                     }
                 }
             });
@@ -480,7 +490,9 @@ public class PolarizerCalibrationWorkflow {
                 progressDialog.close();
                 Dialogs.showErrorMessage(
                         "Calibration Failed",
-                        DocumentationHelper.withDocLink("Failed to complete polarizer calibration:\n" + e.getMessage(), "polarizerCalibration"));
+                        DocumentationHelper.withDocLink(
+                                "Failed to complete polarizer calibration:\n" + e.getMessage(),
+                                "polarizerCalibration"));
             });
         }
         // Note: Don't disconnect - we're using the shared MicroscopeController connection

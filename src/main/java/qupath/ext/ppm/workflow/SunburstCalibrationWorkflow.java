@@ -74,7 +74,9 @@ public class SunburstCalibrationWorkflow {
                             logger.error("Error in sunburst calibration dialog", ex);
                             Platform.runLater(() -> Dialogs.showErrorMessage(
                                     "Calibration Error",
-                                    DocumentationHelper.withDocLink("Failed to show calibration dialog: " + ex.getMessage(), "sunburstCalibration")));
+                                    DocumentationHelper.withDocLink(
+                                            "Failed to show calibration dialog: " + ex.getMessage(),
+                                            "sunburstCalibration")));
                             return null;
                         });
 
@@ -82,7 +84,8 @@ public class SunburstCalibrationWorkflow {
                 logger.error("Failed to start sunburst calibration workflow", e);
                 Dialogs.showErrorMessage(
                         "Calibration Error",
-                        DocumentationHelper.withDocLink("Failed to start sunburst calibration: " + e.getMessage(), "sunburstCalibration"));
+                        DocumentationHelper.withDocLink(
+                                "Failed to start sunburst calibration: " + e.getMessage(), "sunburstCalibration"));
             }
         });
     }
@@ -123,7 +126,8 @@ public class SunburstCalibrationWorkflow {
                         progressDialog.close();
                         Dialogs.showErrorMessage(
                                 "PPM Calibration Error",
-                                DocumentationHelper.withDocLink("Failed to execute calibration: " + ex.getMessage(), "sunburstCalibration"));
+                                DocumentationHelper.withDocLink(
+                                        "Failed to execute calibration: " + ex.getMessage(), "sunburstCalibration"));
                     });
                     return null;
                 });
@@ -288,7 +292,9 @@ public class SunburstCalibrationWorkflow {
                                             progressDialog.close();
                                             Dialogs.showErrorMessage(
                                                     "PPM Calibration Error",
-                                                    DocumentationHelper.withDocLink("Failed to re-run calibration: " + ex.getMessage(), "sunburstCalibration"));
+                                                    DocumentationHelper.withDocLink(
+                                                            "Failed to re-run calibration: " + ex.getMessage(),
+                                                            "sunburstCalibration"));
                                         });
                                         return null;
                                     });
@@ -470,7 +476,8 @@ public class SunburstCalibrationWorkflow {
                             progressDialog.close();
                             Dialogs.showErrorMessage(
                                     "PPM Calibration Error",
-                                    DocumentationHelper.withDocLink("Failed to retry calibration: " + ex.getMessage(), "sunburstCalibration"));
+                                    DocumentationHelper.withDocLink(
+                                            "Failed to retry calibration: " + ex.getMessage(), "sunburstCalibration"));
                         });
                         return null;
                     });

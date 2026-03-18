@@ -1,7 +1,5 @@
 package qupath.ext.ppm.analysis;
 
-import qupath.ext.ppm.PPMPreferences;
-
 import javafx.animation.PauseTransition;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -21,6 +19,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.util.Duration;
+import qupath.ext.ppm.PPMPreferences;
 
 /**
  * JavaFX control panel for the PPM hue range filter overlay and detection creation.

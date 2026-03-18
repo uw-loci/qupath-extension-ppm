@@ -1,7 +1,5 @@
 package qupath.ext.ppm.analysis;
 
-import qupath.ext.ppm.PPMPreferences;
-
 import java.util.ArrayList;
 import java.util.List;
 import javafx.geometry.Insets;
@@ -19,6 +17,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import qupath.ext.ppm.PPMPreferences;
 
 /**
  * JavaFX panel for configuring batch PPM analysis.

@@ -3,22 +3,18 @@ package qupath.ext.ppm.analysis;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import java.awt.image.BufferedImage;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
-import javax.imageio.ImageIO;
+import org.apposed.appose.NDArray;
+import org.apposed.appose.Service.Task;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.ppm.PPMPreferences;
+import qupath.ext.ppm.service.ApposePPMService;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager.PPMAnalysisSet;
@@ -38,7 +34,7 @@ import qupath.lib.roi.interfaces.ROI;
  * for a selected annotation.
  *
  * <p>All angle computation, histograms, and circular statistics are performed
- * by ppm_library (Python) via its CLI entry point. Java handles QuPath I/O
+ * by ppm_library (Python) via Appose. Java handles QuPath I/O
  * (reading image regions, extracting annotation shapes) and displays results.</p>
  *
  * @author Mike Nelson
@@ -51,7 +47,6 @@ public class PPMPolarityPlotWorkflow {
     private static Stage plotWindow;
     private static PolarHistogramPanel plotPanel;
 
-    // Analysis parameters now read from PPMPreferences (configurable in QuPath Preferences)
     private static double getBirefThreshold() {
         return PPMPreferences.getBirefringenceThreshold();
     }
@@ -71,7 +66,8 @@ public class PPMPolarityPlotWorkflow {
                 runOnFXThread();
             } catch (Exception e) {
                 logger.error("Failed to run polarity plot workflow", e);
-                Dialogs.showErrorMessage("PPM Polarity Plot",
+                Dialogs.showErrorMessage(
+                        "PPM Polarity Plot",
                         DocumentationHelper.withDocLink("Error: " + e.getMessage(), "ppmPolarityPlot"));
             }
         });
@@ -80,29 +76,31 @@ public class PPMPolarityPlotWorkflow {
     private static void runOnFXThread() {
         QuPathGUI gui = QPEx.getQuPath();
         if (gui == null) {
-            Dialogs.showErrorMessage("PPM Polarity Plot",
+            Dialogs.showErrorMessage(
+                    "PPM Polarity Plot",
                     DocumentationHelper.withDocLink("QuPath is not available.", "ppmPolarityPlot"));
             return;
         }
 
         ImageData<BufferedImage> imageData = gui.getImageData();
         if (imageData == null) {
-            Dialogs.showErrorMessage("PPM Polarity Plot",
-                    DocumentationHelper.withDocLink("No image is open.", "ppmPolarityPlot"));
+            Dialogs.showErrorMessage(
+                    "PPM Polarity Plot", DocumentationHelper.withDocLink("No image is open.", "ppmPolarityPlot"));
             return;
         }
 
-        // Get selected annotation
         PathObject selected = imageData.getHierarchy().getSelectionModel().getSelectedObject();
         if (selected == null || !selected.isAnnotation()) {
-            Dialogs.showErrorMessage("PPM Polarity Plot",
+            Dialogs.showErrorMessage(
+                    "PPM Polarity Plot",
                     DocumentationHelper.withDocLink("Please select an annotation first.", "ppmPolarityPlot"));
             return;
         }
 
         ROI roi = selected.getROI();
         if (roi == null) {
-            Dialogs.showErrorMessage("PPM Polarity Plot",
+            Dialogs.showErrorMessage(
+                    "PPM Polarity Plot",
                     DocumentationHelper.withDocLink("Selected annotation has no ROI.", "ppmPolarityPlot"));
             return;
         }
@@ -130,20 +128,18 @@ public class PPMPolarityPlotWorkflow {
             }
         }
         if (calibrationPath == null) {
-            Dialogs.showErrorMessage("PPM Polarity Plot",
-                    DocumentationHelper.withDocLink("No PPM calibration found. Run sunburst calibration first.", "ppmPolarityPlot"));
+            Dialogs.showErrorMessage(
+                    "PPM Polarity Plot",
+                    DocumentationHelper.withDocLink(
+                            "No PPM calibration found. Run sunburst calibration first.", "ppmPolarityPlot"));
             return;
         }
 
-        // Show plot window
         ensurePlotWindow(gui);
 
-        // Run computation in background
         final String finalCalibrationPath = calibrationPath;
         final ImageServer<BufferedImage> sumServer = imageData.getServer();
         final String annotationName = selected.getDisplayedName();
-
-        // Determine biref server path (if sibling exists)
         final PPMAnalysisSet finalAnalysisSet = analysisSet;
 
         CompletableFuture.runAsync(() -> {
@@ -151,9 +147,9 @@ public class PPMPolarityPlotWorkflow {
                 computeAndDisplay(sumServer, roi, finalCalibrationPath, finalAnalysisSet, annotationName);
             } catch (Exception e) {
                 logger.error("Polarity plot computation failed", e);
-                Platform.runLater(
-                        () -> Dialogs.showErrorMessage("PPM Polarity Plot",
-                                DocumentationHelper.withDocLink("Computation failed: " + e.getMessage(), "ppmPolarityPlot")));
+                Platform.runLater(() -> Dialogs.showErrorMessage(
+                        "PPM Polarity Plot",
+                        DocumentationHelper.withDocLink("Computation failed: " + e.getMessage(), "ppmPolarityPlot")));
             }
         });
     }
@@ -166,7 +162,13 @@ public class PPMPolarityPlotWorkflow {
             String annotationName)
             throws Exception {
 
-        // Create region request from annotation bounds
+        // Ensure Appose PPM environment is initialized
+        ApposePPMService service = ApposePPMService.getInstance();
+        if (!service.isAvailable()) {
+            logger.info("PPM analysis environment not ready, initializing...");
+            service.initialize(msg -> logger.info("PPM setup: {}", msg));
+        }
+
         int x = (int) roi.getBoundsX();
         int y = (int) roi.getBoundsY();
         int w = (int) Math.ceil(roi.getBoundsWidth());
@@ -176,17 +178,15 @@ public class PPMPolarityPlotWorkflow {
 
         RegionRequest request = RegionRequest.createInstance(sumServer.getPath(), 1.0, x, y, w, h);
 
-        // Create temp directory for image exchange
-        Path tempDir = Files.createTempDirectory("ppm_analysis_");
+        NDArray sumNDArray = null;
+        NDArray birefNDArray = null;
+        NDArray roiNDArray = null;
 
         try {
-            // Write sum region to temp file
             BufferedImage sumRegion = sumServer.readRegion(request);
-            Path sumPath = tempDir.resolve("sum_region.tif");
-            ImageIO.write(sumRegion, "TIFF", sumPath.toFile());
+            sumNDArray = PPMPerpendicularityWorkflow.bufferedImageToRGBNDArray(sumRegion);
 
-            // Write biref region if available
-            Path birefPath = null;
+            // Read biref region if available
             if (analysisSet != null && analysisSet.hasBirefImage()) {
                 try {
                     @SuppressWarnings("unchecked")
@@ -195,138 +195,78 @@ public class PPMPolarityPlotWorkflow {
                     ImageServer<BufferedImage> birefServer = birefData.getServer();
                     RegionRequest birefRequest = RegionRequest.createInstance(birefServer.getPath(), 1.0, x, y, w, h);
                     BufferedImage birefRegion = birefServer.readRegion(birefRequest);
-                    birefPath = tempDir.resolve("biref_region.tif");
-                    ImageIO.write(birefRegion, "TIFF", birefPath.toFile());
+                    birefNDArray = PPMPerpendicularityWorkflow.bufferedImageToGrayNDArray(birefRegion);
                     birefServer.close();
-                    logger.info("Wrote biref region to {}", birefPath);
+                    logger.info("Read biref region for polarity analysis");
                 } catch (Exception e) {
                     logger.warn("Could not read biref sibling: {}", e.getMessage());
                 }
             }
 
-            // Write ROI mask (annotation shape)
-            Path roiMaskPath = tempDir.resolve("roi_mask.tif");
-            writeROIMask(roi, x, y, w, h, roiMaskPath);
+            // Create ROI mask as NDArray
+            roiNDArray = createROIMaskNDArray(roi, x, y, w, h);
 
-            // Call Python analysis via ppm_library CLI
-            JsonObject result = callPythonAnalysis(sumPath, calibrationPath, birefPath, roiMaskPath);
+            // Build Appose task inputs
+            Map<String, Object> inputs = new HashMap<>();
+            inputs.put("sum_image", sumNDArray);
+            inputs.put("calibration_path", calibrationPath);
+            inputs.put("bins", getHistogramBins());
+            inputs.put("saturation_threshold", PPMPreferences.getSaturationThreshold());
+            inputs.put("value_threshold", PPMPreferences.getValueThreshold());
 
-            // Parse and display results
+            if (birefNDArray != null) {
+                inputs.put("biref_image", birefNDArray);
+                inputs.put("biref_threshold", getBirefThreshold());
+            }
+
+            if (roiNDArray != null) {
+                inputs.put("roi_mask", roiNDArray);
+            }
+
+            logger.info("Running polarity analysis via Appose");
+
+            Task task = service.runTask("run_polarity", inputs);
+            String json = (String) task.outputs.get("result_json");
+
+            Gson gson = new Gson();
+            JsonObject result = gson.fromJson(json, JsonObject.class);
+
+            if (result.has("error") && !result.get("error").isJsonNull()) {
+                throw new RuntimeException(
+                        "Python analysis error: " + result.get("error").getAsString());
+            }
+
             displayResults(result, annotationName);
 
         } finally {
-            // Clean up temp files
-            try {
-                Files.walk(tempDir)
-                        .sorted(java.util.Comparator.reverseOrder())
-                        .map(Path::toFile)
-                        .forEach(File::delete);
-            } catch (Exception e) {
-                logger.debug("Could not clean up temp dir: {}", e.getMessage());
-            }
+            if (sumNDArray != null) sumNDArray.close();
+            if (birefNDArray != null) birefNDArray.close();
+            if (roiNDArray != null) roiNDArray.close();
         }
     }
 
     /**
-     * Calls ppm_library's CLI for region analysis.
+     * Creates a binary ROI mask as an NDArray (H, W) uint8.
      */
-    private static JsonObject callPythonAnalysis(Path sumPath, String calibrationPath, Path birefPath, Path roiMaskPath)
-            throws Exception {
-
-        List<String> command = new ArrayList<>();
-        command.add("python");
-        command.add("-m");
-        command.add("ppm_library.analysis.cli");
-        command.add("--sum");
-        command.add(sumPath.toString());
-        command.add("--calibration");
-        command.add(calibrationPath);
-        command.add("--bins");
-        command.add(String.valueOf(getHistogramBins()));
-        command.add("--saturation-threshold");
-        command.add(String.valueOf(PPMPreferences.getSaturationThreshold()));
-        command.add("--value-threshold");
-        command.add(String.valueOf(PPMPreferences.getValueThreshold()));
-
-        if (birefPath != null) {
-            command.add("--biref");
-            command.add(birefPath.toString());
-            command.add("--biref-threshold");
-            command.add(String.valueOf(getBirefThreshold()));
-        }
-
-        if (roiMaskPath != null) {
-            command.add("--roi-mask");
-            command.add(roiMaskPath.toString());
-        }
-
-        logger.info("Running Python analysis: {}", String.join(" ", command));
-
-        ProcessBuilder pb = new ProcessBuilder(command);
-        pb.redirectErrorStream(false);
-
-        Process process = pb.start();
-
-        // Read stdout (JSON result)
-        StringBuilder stdout = new StringBuilder();
-        try (BufferedReader reader =
-                new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                stdout.append(line);
+    static NDArray createROIMaskNDArray(ROI roi, int offsetX, int offsetY, int width, int height) {
+        BufferedImage mask = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_GRAY);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                if (roi.contains(offsetX + x + 0.5, offsetY + y + 0.5)) {
+                    mask.getRaster().setSample(x, y, 0, 255);
+                }
             }
         }
-
-        // Read stderr (errors/warnings)
-        StringBuilder stderr = new StringBuilder();
-        try (BufferedReader reader =
-                new BufferedReader(new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                stderr.append(line).append("\n");
-            }
-        }
-
-        int exitCode = process.waitFor();
-
-        if (stderr.length() > 0) {
-            logger.debug("Python stderr: {}", stderr.toString().trim());
-        }
-
-        if (exitCode != 0) {
-            throw new RuntimeException("Python analysis failed (exit code " + exitCode + "): "
-                    + stderr.toString().trim());
-        }
-
-        String jsonStr = stdout.toString().trim();
-        if (jsonStr.isEmpty()) {
-            throw new RuntimeException("Python analysis returned empty output");
-        }
-
-        Gson gson = new Gson();
-        JsonObject result = gson.fromJson(jsonStr, JsonObject.class);
-
-        // Check for error in JSON
-        if (result.has("error") && !result.get("error").isJsonNull()) {
-            throw new RuntimeException(
-                    "Python analysis error: " + result.get("error").getAsString());
-        }
-
-        return result;
+        return PPMPerpendicularityWorkflow.bufferedImageToGrayNDArray(mask);
     }
 
-    /**
-     * Displays results from the Python analysis.
-     */
     private static void displayResults(JsonObject result, String annotationName) {
-        // Parse histogram
         var countsArray = result.getAsJsonArray("histogram_counts");
         int[] counts = new int[countsArray.size()];
         for (int i = 0; i < counts.length; i++) {
             counts[i] = countsArray.get(i).getAsInt();
         }
 
-        // Parse stats
         double circularMean = getDoubleOrNaN(result, "circular_mean");
         double circularStd = getDoubleOrNaN(result, "circular_std");
         double resultantLength = getDoubleOrNaN(result, "resultant_length");
@@ -356,25 +296,6 @@ public class PPMPolarityPlotWorkflow {
         return obj.get(key).getAsDouble();
     }
 
-    /**
-     * Writes a binary mask image for the ROI shape.
-     */
-    private static void writeROIMask(ROI roi, int offsetX, int offsetY, int width, int height, Path outputPath)
-            throws Exception {
-        BufferedImage mask = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_GRAY);
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                if (roi.contains(offsetX + x + 0.5, offsetY + y + 0.5)) {
-                    mask.getRaster().setSample(x, y, 0, 255);
-                }
-            }
-        }
-        ImageIO.write(mask, "TIFF", outputPath.toFile());
-    }
-
-    /**
-     * Creates or shows the plot window.
-     */
     private static void ensurePlotWindow(QuPathGUI gui) {
         if (plotWindow == null || !plotWindow.isShowing()) {
             plotPanel = new PolarHistogramPanel();
