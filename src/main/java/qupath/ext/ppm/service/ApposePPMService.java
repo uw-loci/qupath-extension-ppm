@@ -147,8 +147,11 @@ public class ApposePPMService {
                 // Create Python service (lazy - subprocess starts on first task)
                 pythonService = environment.python();
 
-                // Log Python stderr at INFO level
-                pythonService.debug(msg -> logger.info("[PPM Python] {}", msg));
+                // Log Python stderr at INFO level and route to console window
+                pythonService.debug(msg -> {
+                    logger.info("[PPM Python] {}", msg);
+                    qupath.ext.ppm.ui.PythonConsoleWindow.appendMessage(msg);
+                });
 
                 // Set the init script. Must prepend "import numpy" before the main
                 // init script to avoid Windows deadlock (numpy/numpy#24290).

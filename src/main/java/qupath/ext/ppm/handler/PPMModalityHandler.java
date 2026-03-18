@@ -2,24 +2,21 @@ package qupath.ext.ppm.handler;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import javafx.application.Platform;
-import javafx.geometry.Insets;
-import javafx.scene.Scene;
-import javafx.scene.control.Label;
-import javafx.scene.layout.VBox;
-import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.ppm.PPMPreferences;
 import qupath.ext.ppm.service.ApposePPMService;
 import qupath.ext.ppm.ui.PPMAngleSelectionController;
 import qupath.ext.ppm.ui.PPMBoundingBoxUI;
+import qupath.ext.ppm.ui.PythonConsoleWindow;
+import qupath.ext.ppm.ui.SetupEnvironmentDialog;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.BackgroundValidationResult;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityMenuItem;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.fx.dialogs.Dialogs;
+import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
 
 /**
@@ -380,6 +377,12 @@ public class PPMModalityHandler implements ModalityHandler {
                 "Delete and rebuild the PPM analysis Python environment from scratch. "
                         + "Use this if the environment becomes corrupted or needs updating.",
                 PPMModalityHandler::showRebuildEnvironmentDialog));
+        items.add(new ModalityMenuItem(
+                "ppmPythonConsole",
+                "Python Console...",
+                "Show a live console window displaying Python process output. "
+                        + "Useful for monitoring PPM analysis progress and debugging.",
+                () -> PythonConsoleWindow.getInstance().show()));
 
         return items;
     }
@@ -436,7 +439,7 @@ public class PPMModalityHandler implements ModalityHandler {
     }
 
     /**
-     * Shows a progress dialog and initializes the PPM analysis environment.
+     * Shows the multi-state setup wizard for the PPM analysis environment.
      */
     private static void showSetupEnvironmentDialog() {
         if (ApposePPMService.getInstance().isAvailable()) {
@@ -445,38 +448,14 @@ public class PPMModalityHandler implements ModalityHandler {
             return;
         }
 
-        Stage dialog = new Stage();
-        dialog.setTitle("PPM Analysis Environment Setup");
-
-        Label statusLabel = new Label("Starting setup...");
-        statusLabel.setWrapText(true);
-        javafx.scene.control.ProgressBar progressBar = new javafx.scene.control.ProgressBar(-1);
-        progressBar.setPrefWidth(400);
-
-        VBox box = new VBox(10, statusLabel, progressBar);
-        box.setPadding(new Insets(15));
-        dialog.setScene(new Scene(box, 450, 100));
+        QuPathGUI gui = QuPathGUI.getInstance();
+        javafx.stage.Window owner = gui != null ? gui.getStage() : null;
+        SetupEnvironmentDialog dialog = new SetupEnvironmentDialog(owner, null);
         dialog.show();
-
-        CompletableFuture.runAsync(() -> {
-            try {
-                ApposePPMService.getInstance().initialize(msg -> Platform.runLater(() -> statusLabel.setText(msg)));
-                Platform.runLater(() -> {
-                    dialog.close();
-                    Dialogs.showMessageDialog("PPM Analysis Environment", "PPM analysis environment setup complete!");
-                });
-            } catch (Exception e) {
-                logger.error("Environment setup failed: {}", e.getMessage(), e);
-                Platform.runLater(() -> {
-                    dialog.close();
-                    Dialogs.showErrorMessage("PPM Analysis Environment", "Setup failed: " + e.getMessage());
-                });
-            }
-        });
     }
 
     /**
-     * Shuts down, deletes, and rebuilds the PPM analysis environment.
+     * Shuts down and deletes the PPM analysis environment, then shows the setup wizard.
      */
     private static void showRebuildEnvironmentDialog() {
         boolean confirm = Dialogs.showConfirmDialog(
@@ -485,39 +464,20 @@ public class PPMModalityHandler implements ModalityHandler {
                         + "This may take several minutes.\n\nContinue?");
         if (!confirm) return;
 
-        Stage dialog = new Stage();
-        dialog.setTitle("Rebuilding PPM Analysis Environment");
+        try {
+            ApposePPMService service = ApposePPMService.getInstance();
+            service.shutdown();
+            service.deleteEnvironment();
+        } catch (Exception e) {
+            logger.error("Failed to delete environment: {}", e.getMessage(), e);
+            Dialogs.showErrorMessage("PPM Analysis Environment", "Failed to delete environment: " + e.getMessage());
+            return;
+        }
 
-        Label statusLabel = new Label("Shutting down existing environment...");
-        statusLabel.setWrapText(true);
-        javafx.scene.control.ProgressBar progressBar = new javafx.scene.control.ProgressBar(-1);
-        progressBar.setPrefWidth(400);
-
-        VBox box = new VBox(10, statusLabel, progressBar);
-        box.setPadding(new Insets(15));
-        dialog.setScene(new Scene(box, 450, 100));
+        // Show the setup wizard to rebuild
+        QuPathGUI gui = QuPathGUI.getInstance();
+        javafx.stage.Window owner = gui != null ? gui.getStage() : null;
+        SetupEnvironmentDialog dialog = new SetupEnvironmentDialog(owner, null);
         dialog.show();
-
-        CompletableFuture.runAsync(() -> {
-            try {
-                ApposePPMService service = ApposePPMService.getInstance();
-                service.shutdown();
-                Platform.runLater(() -> statusLabel.setText("Deleting environment..."));
-                service.deleteEnvironment();
-                Platform.runLater(() -> statusLabel.setText("Rebuilding environment..."));
-                service.initialize(msg -> Platform.runLater(() -> statusLabel.setText(msg)));
-                Platform.runLater(() -> {
-                    dialog.close();
-                    Dialogs.showMessageDialog(
-                            "PPM Analysis Environment", "PPM analysis environment rebuilt successfully!");
-                });
-            } catch (Exception e) {
-                logger.error("Environment rebuild failed: {}", e.getMessage(), e);
-                Platform.runLater(() -> {
-                    dialog.close();
-                    Dialogs.showErrorMessage("PPM Analysis Environment", "Rebuild failed: " + e.getMessage());
-                });
-            }
-        });
     }
 }
