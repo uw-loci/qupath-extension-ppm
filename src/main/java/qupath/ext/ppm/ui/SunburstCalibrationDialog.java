@@ -406,21 +406,21 @@ public class SunburstCalibrationDialog {
                 String output = outputField.getText().trim();
 
                 if (output.isEmpty()) {
-                    Dialogs.showErrorMessage(
-                            "Invalid Output Folder", "Please specify an output folder for calibration files.");
+                    Dialogs.showErrorMessage("Invalid Output Folder",
+                            DocumentationHelper.withDocLink("Please specify an output folder for calibration files.", "sunburstCalibration"));
                     return;
                 }
 
                 if (spokesSpinner.getValue() < 4) {
-                    Dialogs.showErrorMessage("Invalid Spoke Count", "Number of spokes must be at least 4.");
+                    Dialogs.showErrorMessage("Invalid Spoke Count",
+                            DocumentationHelper.withDocLink("Number of spokes must be at least 4.", "sunburstCalibration"));
                     return;
                 }
 
                 String name = nameField.getText().trim();
                 if (!name.isEmpty() && !name.matches("[a-zA-Z0-9_\\-]+")) {
-                    Dialogs.showErrorMessage(
-                            "Invalid Calibration Name",
-                            "Calibration name can only contain letters, numbers, underscores, and hyphens.");
+                    Dialogs.showErrorMessage("Invalid Calibration Name",
+                            DocumentationHelper.withDocLink("Calibration name can only contain letters, numbers, underscores, and hyphens.", "sunburstCalibration"));
                     return;
                 }
 

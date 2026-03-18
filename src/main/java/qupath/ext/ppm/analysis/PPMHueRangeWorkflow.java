@@ -62,7 +62,8 @@ public class PPMHueRangeWorkflow {
                 runOnFXThread();
             } catch (Exception e) {
                 logger.error("Failed to run hue range filter workflow", e);
-                Dialogs.showErrorMessage("PPM Hue Range Filter", "Error: " + e.getMessage());
+                Dialogs.showErrorMessage("PPM Hue Range Filter",
+                        DocumentationHelper.withDocLink("Error: " + e.getMessage(), "ppmHueRangeFilter"));
             }
         });
     }
@@ -70,13 +71,15 @@ public class PPMHueRangeWorkflow {
     private static void runOnFXThread() {
         QuPathGUI gui = QPEx.getQuPath();
         if (gui == null) {
-            Dialogs.showErrorMessage("PPM Hue Range Filter", "QuPath is not available.");
+            Dialogs.showErrorMessage("PPM Hue Range Filter",
+                    DocumentationHelper.withDocLink("QuPath is not available.", "ppmHueRangeFilter"));
             return;
         }
 
         ImageData<BufferedImage> imageData = gui.getImageData();
         if (imageData == null) {
-            Dialogs.showErrorMessage("PPM Hue Range Filter", "No image is open.");
+            Dialogs.showErrorMessage("PPM Hue Range Filter",
+                    DocumentationHelper.withDocLink("No image is open.", "ppmHueRangeFilter"));
             return;
         }
 
@@ -105,8 +108,8 @@ public class PPMHueRangeWorkflow {
             }
         }
         if (calibrationPath == null) {
-            Dialogs.showErrorMessage(
-                    "PPM Hue Range Filter", "No PPM calibration found. Run sunburst calibration first.");
+            Dialogs.showErrorMessage("PPM Hue Range Filter",
+                    DocumentationHelper.withDocLink("No PPM calibration found. Run sunburst calibration first.", "ppmHueRangeFilter"));
             return;
         }
 
@@ -115,7 +118,8 @@ public class PPMHueRangeWorkflow {
         try {
             calibration = PPMCalibration.load(calibrationPath);
         } catch (Exception e) {
-            Dialogs.showErrorMessage("PPM Hue Range Filter", "Failed to load calibration: " + e.getMessage());
+            Dialogs.showErrorMessage("PPM Hue Range Filter",
+                    DocumentationHelper.withDocLink("Failed to load calibration: " + e.getMessage(), "ppmHueRangeFilter"));
             return;
         }
 
@@ -266,7 +270,8 @@ public class PPMHueRangeWorkflow {
                 logger.error("Failed to create PPM detections", e);
                 Platform.runLater(() -> {
                     panel.setCreateDetectionsEnabled(true);
-                    Dialogs.showErrorMessage("PPM Detections", "Error creating detections: " + e.getMessage());
+                    Dialogs.showErrorMessage("PPM Detections",
+                            DocumentationHelper.withDocLink("Error creating detections: " + e.getMessage(), "ppmHueRangeFilter"));
                 });
             }
         });

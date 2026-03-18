@@ -441,8 +441,8 @@ public class BirefringenceOptimizationDialog {
                 File outputDir = new File(output);
 
                 if (output.isEmpty() || !outputDir.exists() || !outputDir.isDirectory()) {
-                    Dialogs.showErrorMessage(
-                            "Invalid Output Folder", "Please select a valid output folder for test results.");
+                    Dialogs.showErrorMessage("Invalid Output Folder",
+                            DocumentationHelper.withDocLink("Please select a valid output folder for test results.", "birefringenceOptimization"));
                     event.consume();
                     return;
                 }
@@ -452,21 +452,23 @@ public class BirefringenceOptimizationDialog {
                 double step = stepSpinner.getValue();
 
                 if (min >= max) {
-                    Dialogs.showErrorMessage(
-                            "Invalid Angle Range", "Maximum angle must be greater than minimum angle.");
+                    Dialogs.showErrorMessage("Invalid Angle Range",
+                            DocumentationHelper.withDocLink("Maximum angle must be greater than minimum angle.", "birefringenceOptimization"));
                     event.consume();
                     return;
                 }
 
                 if (step <= 0 || step > 1.0) {
-                    Dialogs.showErrorMessage("Invalid Step Size", "Step size must be between 0.01 and 1.0 degrees.");
+                    Dialogs.showErrorMessage("Invalid Step Size",
+                            DocumentationHelper.withDocLink("Step size must be between 0.01 and 1.0 degrees.", "birefringenceOptimization"));
                     event.consume();
                     return;
                 }
 
                 if (exposureModeGroup.getSelectedToggle() == fixedMode) {
                     if (fixedExposureSpinner.getValue() <= 0) {
-                        Dialogs.showErrorMessage("Invalid Exposure", "Fixed exposure must be greater than 0 ms.");
+                        Dialogs.showErrorMessage("Invalid Exposure",
+                                DocumentationHelper.withDocLink("Fixed exposure must be greater than 0 ms.", "birefringenceOptimization"));
                         event.consume();
                         return;
                     }

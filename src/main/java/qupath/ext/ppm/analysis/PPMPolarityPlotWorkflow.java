@@ -18,6 +18,7 @@ import javafx.stage.Stage;
 import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.ppm.PPMPreferences;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager.PPMAnalysisSet;
@@ -50,8 +51,14 @@ public class PPMPolarityPlotWorkflow {
     private static Stage plotWindow;
     private static PolarHistogramPanel plotPanel;
 
-    private static final double DEFAULT_BIREF_THRESHOLD = 100.0;
-    private static final int DEFAULT_HISTOGRAM_BINS = 18;
+    // Analysis parameters now read from PPMPreferences (configurable in QuPath Preferences)
+    private static double getBirefThreshold() {
+        return PPMPreferences.getBirefringenceThreshold();
+    }
+
+    private static int getHistogramBins() {
+        return PPMPreferences.getHistogramBins();
+    }
 
     private PPMPolarityPlotWorkflow() {}
 
@@ -64,7 +71,8 @@ public class PPMPolarityPlotWorkflow {
                 runOnFXThread();
             } catch (Exception e) {
                 logger.error("Failed to run polarity plot workflow", e);
-                Dialogs.showErrorMessage("PPM Polarity Plot", "Error: " + e.getMessage());
+                Dialogs.showErrorMessage("PPM Polarity Plot",
+                        DocumentationHelper.withDocLink("Error: " + e.getMessage(), "ppmPolarityPlot"));
             }
         });
     }
@@ -72,26 +80,30 @@ public class PPMPolarityPlotWorkflow {
     private static void runOnFXThread() {
         QuPathGUI gui = QPEx.getQuPath();
         if (gui == null) {
-            Dialogs.showErrorMessage("PPM Polarity Plot", "QuPath is not available.");
+            Dialogs.showErrorMessage("PPM Polarity Plot",
+                    DocumentationHelper.withDocLink("QuPath is not available.", "ppmPolarityPlot"));
             return;
         }
 
         ImageData<BufferedImage> imageData = gui.getImageData();
         if (imageData == null) {
-            Dialogs.showErrorMessage("PPM Polarity Plot", "No image is open.");
+            Dialogs.showErrorMessage("PPM Polarity Plot",
+                    DocumentationHelper.withDocLink("No image is open.", "ppmPolarityPlot"));
             return;
         }
 
         // Get selected annotation
         PathObject selected = imageData.getHierarchy().getSelectionModel().getSelectedObject();
         if (selected == null || !selected.isAnnotation()) {
-            Dialogs.showErrorMessage("PPM Polarity Plot", "Please select an annotation first.");
+            Dialogs.showErrorMessage("PPM Polarity Plot",
+                    DocumentationHelper.withDocLink("Please select an annotation first.", "ppmPolarityPlot"));
             return;
         }
 
         ROI roi = selected.getROI();
         if (roi == null) {
-            Dialogs.showErrorMessage("PPM Polarity Plot", "Selected annotation has no ROI.");
+            Dialogs.showErrorMessage("PPM Polarity Plot",
+                    DocumentationHelper.withDocLink("Selected annotation has no ROI.", "ppmPolarityPlot"));
             return;
         }
 
@@ -118,7 +130,8 @@ public class PPMPolarityPlotWorkflow {
             }
         }
         if (calibrationPath == null) {
-            Dialogs.showErrorMessage("PPM Polarity Plot", "No PPM calibration found. Run sunburst calibration first.");
+            Dialogs.showErrorMessage("PPM Polarity Plot",
+                    DocumentationHelper.withDocLink("No PPM calibration found. Run sunburst calibration first.", "ppmPolarityPlot"));
             return;
         }
 
@@ -139,7 +152,8 @@ public class PPMPolarityPlotWorkflow {
             } catch (Exception e) {
                 logger.error("Polarity plot computation failed", e);
                 Platform.runLater(
-                        () -> Dialogs.showErrorMessage("PPM Polarity Plot", "Computation failed: " + e.getMessage()));
+                        () -> Dialogs.showErrorMessage("PPM Polarity Plot",
+                                DocumentationHelper.withDocLink("Computation failed: " + e.getMessage(), "ppmPolarityPlot")));
             }
         });
     }
@@ -228,13 +242,13 @@ public class PPMPolarityPlotWorkflow {
         command.add("--calibration");
         command.add(calibrationPath);
         command.add("--bins");
-        command.add(String.valueOf(DEFAULT_HISTOGRAM_BINS));
+        command.add(String.valueOf(getHistogramBins()));
 
         if (birefPath != null) {
             command.add("--biref");
             command.add(birefPath.toString());
             command.add("--biref-threshold");
-            command.add(String.valueOf(DEFAULT_BIREF_THRESHOLD));
+            command.add(String.valueOf(getBirefThreshold()));
         }
 
         if (roiMaskPath != null) {

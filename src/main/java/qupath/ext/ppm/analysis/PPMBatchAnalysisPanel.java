@@ -1,5 +1,7 @@
 package qupath.ext.ppm.analysis;
 
+import qupath.ext.ppm.PPMPreferences;
+
 import java.util.ArrayList;
 import java.util.List;
 import javafx.geometry.Insets;
@@ -168,7 +170,8 @@ public class PPMBatchAnalysisPanel extends VBox {
         row++;
 
         perpGrid.add(new Label("Dilation (um):"), 0, row);
-        dilationSpinner = new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(1, 500, 50, 5));
+        dilationSpinner = new Spinner<>(
+                new SpinnerValueFactory.DoubleSpinnerValueFactory(1, 500, PPMPreferences.getDilationUm(), 5));
         dilationSpinner.setEditable(true);
         dilationSpinner.setTooltip(
                 new Tooltip("Distance (in um) to dilate from the boundary for the perpendicularity analysis zone.\n"
@@ -188,7 +191,8 @@ public class PPMBatchAnalysisPanel extends VBox {
         row++;
 
         perpGrid.add(new Label("TACS threshold (deg):"), 0, row);
-        tacsThresholdSpinner = new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(5, 85, 30, 5));
+        tacsThresholdSpinner = new Spinner<>(
+                new SpinnerValueFactory.DoubleSpinnerValueFactory(5, 85, PPMPreferences.getTacsThresholdDeg(), 5));
         tacsThresholdSpinner.setEditable(true);
         tacsThresholdSpinner.setTooltip(new Tooltip("Angle threshold (in deg) for PS-TACS classification.\n"
                 + "Fibers within this angle of being perpendicular to the boundary are\n"

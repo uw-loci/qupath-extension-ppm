@@ -1,5 +1,7 @@
 package qupath.ext.ppm.analysis;
 
+import qupath.ext.ppm.PPMPreferences;
+
 import javafx.animation.PauseTransition;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -96,14 +98,16 @@ public class PPMHueRangePanel extends VBox {
         Label threshLabel = new Label("Validity Thresholds:");
         threshLabel.setFont(Font.font("System", FontWeight.SEMI_BOLD, 12));
 
-        saturationSlider = createSlider(0, 1, 0.2);
+        double satDefault = PPMPreferences.getSaturationThreshold();
+        double valDefault = PPMPreferences.getValueThreshold();
+        saturationSlider = createSlider(0, 1, satDefault);
         saturationSlider.setTooltip(new Tooltip("Minimum saturation threshold for valid pixels.\n"
                 + "Pixels with saturation below this value are excluded."));
-        valueSlider = createSlider(0, 1, 0.2);
+        valueSlider = createSlider(0, 1, valDefault);
         valueSlider.setTooltip(new Tooltip("Minimum brightness (value) threshold for valid pixels.\n"
                 + "Pixels with brightness below this value are excluded."));
-        satValueLabel = new Label("0.20");
-        valValueLabel = new Label("0.20");
+        satValueLabel = new Label(String.format("%.2f", satDefault));
+        valValueLabel = new Label(String.format("%.2f", valDefault));
 
         GridPane threshGrid = new GridPane();
         threshGrid.setHgap(8);

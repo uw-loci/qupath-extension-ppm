@@ -21,6 +21,7 @@ import qupath.ext.ppm.ui.BirefringenceOptimizationDialog;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 
@@ -83,14 +84,16 @@ public class BirefringenceOptimizationWorkflow {
                         .exceptionally(ex -> {
                             logger.error("Error in birefringence optimization dialog", ex);
                             Platform.runLater(() -> Dialogs.showErrorMessage(
-                                    "Optimization Error", "Failed to show optimization dialog: " + ex.getMessage()));
+                                    "Optimization Error",
+                                    DocumentationHelper.withDocLink("Failed to show optimization dialog: " + ex.getMessage(), "birefringenceOptimization")));
                             return null;
                         });
 
             } catch (Exception e) {
                 logger.error("Failed to start birefringence optimization workflow", e);
                 Dialogs.showErrorMessage(
-                        "Optimization Error", "Failed to start birefringence optimization: " + e.getMessage());
+                        "Optimization Error",
+                        DocumentationHelper.withDocLink("Failed to start birefringence optimization: " + e.getMessage(), "birefringenceOptimization"));
             }
         });
     }
@@ -155,7 +158,7 @@ public class BirefringenceOptimizationWorkflow {
                         progressStage.close();
                         Dialogs.showErrorMessage(
                                 "Birefringence Optimization Error",
-                                "Failed to execute optimization: " + ex.getMessage());
+                                DocumentationHelper.withDocLink("Failed to execute optimization: " + ex.getMessage(), "birefringenceOptimization"));
                     });
                     return null;
                 });
@@ -353,7 +356,8 @@ public class BirefringenceOptimizationWorkflow {
                         }
                     } catch (Exception e) {
                         logger.error("Failed to open results folder", e);
-                        Dialogs.showErrorMessage("Error", "Failed to open results folder: " + e.getMessage());
+                        Dialogs.showErrorMessage("Error",
+                                DocumentationHelper.withDocLink("Failed to open results folder: " + e.getMessage(), "birefringenceOptimization"));
                     }
                 }
             });
@@ -370,7 +374,8 @@ public class BirefringenceOptimizationWorkflow {
             Platform.runLater(() -> {
                 progressStage.close();
                 Dialogs.showErrorMessage(
-                        "Optimization Failed", "Failed to complete birefringence optimization:\n" + e.getMessage());
+                        "Optimization Failed",
+                        DocumentationHelper.withDocLink("Failed to complete birefringence optimization:\n" + e.getMessage(), "birefringenceOptimization"));
             });
         }
         // Note: Don't disconnect - we're using the shared MicroscopeController connection

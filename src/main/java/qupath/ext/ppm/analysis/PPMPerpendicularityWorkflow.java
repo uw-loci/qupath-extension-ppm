@@ -34,6 +34,7 @@ import javafx.stage.Stage;
 import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.ppm.PPMPreferences;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager.PPMAnalysisSet;
@@ -84,9 +85,18 @@ public class PPMPerpendicularityWorkflow {
 
     private static final Logger logger = LoggerFactory.getLogger(PPMPerpendicularityWorkflow.class);
 
-    private static final double DEFAULT_BIREF_THRESHOLD = 100.0;
-    private static final double DEFAULT_DILATION_UM = 50.0;
-    private static final double DEFAULT_TACS_THRESHOLD = 30.0;
+    // Analysis parameters now read from PPMPreferences (configurable in QuPath Preferences)
+    private static double getBirefThreshold() {
+        return PPMPreferences.getBirefringenceThreshold();
+    }
+
+    private static double getDefaultDilationUm() {
+        return PPMPreferences.getDilationUm();
+    }
+
+    private static double getDefaultTacsThreshold() {
+        return PPMPreferences.getTacsThresholdDeg();
+    }
 
     /** Pixels within this margin of the image border are excluded from TACS polylines. */
     private static final double IMAGE_BORDER_MARGIN_PX = 3.0;
@@ -123,7 +133,8 @@ public class PPMPerpendicularityWorkflow {
                 runOnFXThread();
             } catch (Exception e) {
                 logger.error("Failed to run perpendicularity workflow", e);
-                Dialogs.showErrorMessage("Surface Perpendicularity Analysis", "Error: " + e.getMessage());
+                Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
+                        DocumentationHelper.withDocLink("Error: " + e.getMessage(), "ppmPerpendicularity"));
             }
         });
     }
@@ -131,13 +142,15 @@ public class PPMPerpendicularityWorkflow {
     private static void runOnFXThread() {
         QuPathGUI gui = QPEx.getQuPath();
         if (gui == null) {
-            Dialogs.showErrorMessage("Surface Perpendicularity Analysis", "QuPath is not available.");
+            Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
+                    DocumentationHelper.withDocLink("QuPath is not available.", "ppmPerpendicularity"));
             return;
         }
 
         ImageData<BufferedImage> imageData = gui.getImageData();
         if (imageData == null) {
-            Dialogs.showErrorMessage("Surface Perpendicularity Analysis", "No image is open.");
+            Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
+                    DocumentationHelper.withDocLink("No image is open.", "ppmPerpendicularity"));
             return;
         }
 
@@ -145,7 +158,9 @@ public class PPMPerpendicularityWorkflow {
         if (project == null) {
             Dialogs.showErrorMessage(
                     "Surface Perpendicularity Analysis",
-                    "A QuPath project is required for this analysis.\n" + "Create or open a project first.");
+                    DocumentationHelper.withDocLink(
+                            "A QuPath project is required for this analysis.\n" + "Create or open a project first.",
+                            "ppmPerpendicularity"));
             return;
         }
 
@@ -154,7 +169,9 @@ public class PPMPerpendicularityWorkflow {
         String calibrationPath = findCalibrationPath(currentEntry, project);
         if (calibrationPath == null) {
             Dialogs.showErrorMessage(
-                    "Surface Perpendicularity Analysis", "No PPM calibration found. Run sunburst calibration first.");
+                    "Surface Perpendicularity Analysis",
+                    DocumentationHelper.withDocLink(
+                            "No PPM calibration found. Run sunburst calibration first.", "ppmPerpendicularity"));
             return;
         }
 
@@ -173,11 +190,13 @@ public class PPMPerpendicularityWorkflow {
             try {
                 pixelSizeUm = Double.parseDouble(input.trim());
             } catch (NumberFormatException e) {
-                Dialogs.showErrorMessage("Surface Perpendicularity Analysis", "Invalid pixel size: " + input);
+                Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
+                        DocumentationHelper.withDocLink("Invalid pixel size: " + input, "ppmPerpendicularity"));
                 return;
             }
             if (pixelSizeUm <= 0) {
-                Dialogs.showErrorMessage("Surface Perpendicularity Analysis", "Pixel size must be positive.");
+                Dialogs.showErrorMessage("Surface Perpendicularity Analysis",
+                        DocumentationHelper.withDocLink("Pixel size must be positive.", "ppmPerpendicularity"));
                 return;
             }
         }
@@ -195,7 +214,9 @@ public class PPMPerpendicularityWorkflow {
         if (classNames.isEmpty()) {
             Dialogs.showErrorMessage(
                     "Surface Perpendicularity Analysis",
-                    "No classified annotations found.\n" + "Assign a class to boundary annotations first.");
+                    DocumentationHelper.withDocLink(
+                            "No classified annotations found.\n" + "Assign a class to boundary annotations first.",
+                            "ppmPerpendicularity"));
             return;
         }
 
@@ -254,7 +275,7 @@ public class PPMPerpendicularityWorkflow {
         // Dilation
         grid.add(new Label("Border zone width (um):"), 0, row);
         Spinner<Double> dilationSpinner =
-                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(1, 500, DEFAULT_DILATION_UM, 5));
+                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(1, 500, getDefaultDilationUm(), 5));
         dilationSpinner.setEditable(true);
         grid.add(dilationSpinner, 1, row);
         row++;
@@ -270,7 +291,7 @@ public class PPMPerpendicularityWorkflow {
         // TACS threshold
         grid.add(new Label("TACS threshold (deg from normal):"), 0, row);
         Spinner<Double> tacsSpinner =
-                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(5, 85, DEFAULT_TACS_THRESHOLD, 5));
+                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(5, 85, getDefaultTacsThreshold(), 5));
         tacsSpinner.setEditable(true);
         grid.add(tacsSpinner, 1, row);
         row++;
@@ -331,7 +352,9 @@ public class PPMPerpendicularityWorkflow {
             if (matchingAnnotations.isEmpty()) {
                 Dialogs.showErrorMessage(
                         "Surface Perpendicularity Analysis",
-                        "No annotations found with class '" + selectedClass + "'.");
+                        DocumentationHelper.withDocLink(
+                                "No annotations found with class '" + selectedClass + "'.",
+                                "ppmPerpendicularity"));
                 return;
             }
 
@@ -440,7 +463,9 @@ public class PPMPerpendicularityWorkflow {
                 } catch (Exception ex) {
                     logger.error("Perpendicularity analysis failed", ex);
                     Platform.runLater(() -> Dialogs.showErrorMessage(
-                            "Surface Perpendicularity Analysis", "Analysis failed: " + ex.getMessage()));
+                            "Surface Perpendicularity Analysis",
+                            DocumentationHelper.withDocLink(
+                                    "Analysis failed: " + ex.getMessage(), "ppmPerpendicularity")));
                 }
             });
         });
@@ -757,7 +782,7 @@ public class PPMPerpendicularityWorkflow {
             command.add("--biref");
             command.add(birefPath.toString());
             command.add("--biref-threshold");
-            command.add(String.valueOf(DEFAULT_BIREF_THRESHOLD));
+            command.add(String.valueOf(getBirefThreshold()));
         }
 
         if (outputDir != null) {

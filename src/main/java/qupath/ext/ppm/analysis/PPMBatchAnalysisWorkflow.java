@@ -58,8 +58,14 @@ public class PPMBatchAnalysisWorkflow {
 
     private static final Logger logger = LoggerFactory.getLogger(PPMBatchAnalysisWorkflow.class);
 
-    private static final double DEFAULT_BIREF_THRESHOLD = 100.0;
-    private static final int DEFAULT_HISTOGRAM_BINS = 18;
+    // Analysis parameters now read from PPMPreferences (configurable in QuPath Preferences)
+    private static double getBirefThreshold() {
+        return PPMPreferences.getBirefringenceThreshold();
+    }
+
+    private static int getHistogramBins() {
+        return PPMPreferences.getHistogramBins();
+    }
 
     private static final AtomicBoolean cancelled = new AtomicBoolean(false);
 
@@ -74,7 +80,8 @@ public class PPMBatchAnalysisWorkflow {
                 runOnFXThread();
             } catch (Exception e) {
                 logger.error("Failed to run batch analysis workflow", e);
-                Dialogs.showErrorMessage("Batch PPM Analysis", "Error: " + e.getMessage());
+                Dialogs.showErrorMessage("Batch PPM Analysis",
+                        DocumentationHelper.withDocLink("Error: " + e.getMessage(), "ppmBatchAnalysis"));
             }
         });
     }
@@ -86,14 +93,17 @@ public class PPMBatchAnalysisWorkflow {
     private static void runOnFXThread() {
         QuPathGUI gui = QPEx.getQuPath();
         if (gui == null) {
-            Dialogs.showErrorMessage("Batch PPM Analysis", "QuPath is not available.");
+            Dialogs.showErrorMessage("Batch PPM Analysis",
+                    DocumentationHelper.withDocLink("QuPath is not available.", "ppmBatchAnalysis"));
             return;
         }
 
         Project<BufferedImage> project = gui.getProject();
         if (project == null) {
             Dialogs.showErrorMessage(
-                    "Batch PPM Analysis", "A QuPath project is required. Create or open a project first.");
+                    "Batch PPM Analysis",
+                    DocumentationHelper.withDocLink(
+                            "A QuPath project is required. Create or open a project first.", "ppmBatchAnalysis"));
             return;
         }
 
@@ -103,8 +113,10 @@ public class PPMBatchAnalysisWorkflow {
         if (discoveredSets.isEmpty()) {
             Dialogs.showErrorMessage(
                     "Batch PPM Analysis",
-                    "No qualified PPM analysis sets found in this project.\n\n"
-                            + "Requirements: PPM modality images with a sum image and calibration.");
+                    DocumentationHelper.withDocLink(
+                            "No qualified PPM analysis sets found in this project.\n\n"
+                                    + "Requirements: PPM modality images with a sum image and calibration.",
+                            "ppmBatchAnalysis"));
             return;
         }
 
@@ -276,18 +288,23 @@ public class PPMBatchAnalysisWorkflow {
         panel.setOnRun(() -> {
             List<PPMBatchAnalysisPanel.AnalysisSetItem> selected = panel.getSelectedItems();
             if (selected.isEmpty()) {
-                Dialogs.showErrorMessage("Batch PPM Analysis", "No analysis sets selected.");
+                Dialogs.showErrorMessage("Batch PPM Analysis",
+                        DocumentationHelper.withDocLink("No analysis sets selected.", "ppmBatchAnalysis"));
                 return;
             }
             if (!panel.isPolaritySelected() && !panel.isPerpendicularitySelected()) {
-                Dialogs.showErrorMessage("Batch PPM Analysis", "Select at least one analysis type.");
+                Dialogs.showErrorMessage("Batch PPM Analysis",
+                        DocumentationHelper.withDocLink("Select at least one analysis type.", "ppmBatchAnalysis"));
                 return;
             }
             if (panel.isPerpendicularitySelected()
                     && (panel.getBoundaryClass() == null
                             || panel.getBoundaryClass().isEmpty())) {
                 Dialogs.showErrorMessage(
-                        "Batch PPM Analysis", "Select a boundary annotation class for perpendicularity analysis.");
+                        "Batch PPM Analysis",
+                        DocumentationHelper.withDocLink(
+                                "Select a boundary annotation class for perpendicularity analysis.",
+                                "ppmBatchAnalysis"));
                 return;
             }
 
@@ -560,8 +577,10 @@ public class PPMBatchAnalysisWorkflow {
                     progressStage.close();
                     Dialogs.showErrorMessage(
                             "Batch PPM Analysis",
-                            "Analysis completed but CSV write failed: " + e.getMessage()
-                                    + "\n\nMeasurements were still stored on annotations.");
+                            DocumentationHelper.withDocLink(
+                                    "Analysis completed but CSV write failed: " + e.getMessage()
+                                            + "\n\nMeasurements were still stored on annotations.",
+                                    "ppmBatchAnalysis"));
                 });
             }
 
@@ -607,7 +626,7 @@ public class PPMBatchAnalysisWorkflow {
             command.add("--calibration");
             command.add(calibrationPath);
             command.add("--bins");
-            command.add(String.valueOf(DEFAULT_HISTOGRAM_BINS));
+            command.add(String.valueOf(getHistogramBins()));
             command.add("--roi-mask");
             command.add(roiMaskPath.toString());
 
@@ -615,7 +634,7 @@ public class PPMBatchAnalysisWorkflow {
                 command.add("--biref");
                 command.add(birefPath.toString());
                 command.add("--biref-threshold");
-                command.add(String.valueOf(DEFAULT_BIREF_THRESHOLD));
+                command.add(String.valueOf(getBirefThreshold()));
             }
 
             return callPython(command);
@@ -693,7 +712,7 @@ public class PPMBatchAnalysisWorkflow {
                 command.add("--biref");
                 command.add(birefPath.toString());
                 command.add("--biref-threshold");
-                command.add(String.valueOf(DEFAULT_BIREF_THRESHOLD));
+                command.add(String.valueOf(getBirefThreshold()));
             }
 
             return callPython(command);

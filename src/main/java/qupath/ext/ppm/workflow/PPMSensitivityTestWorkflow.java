@@ -77,13 +77,15 @@ public class PPMSensitivityTestWorkflow {
                         .exceptionally(ex -> {
                             logger.error("Error in PPM sensitivity test dialog", ex);
                             Platform.runLater(() -> Dialogs.showErrorMessage(
-                                    "Test Error", "Failed to show test dialog: " + ex.getMessage()));
+                                    "Test Error",
+                                    DocumentationHelper.withDocLink("Failed to show test dialog: " + ex.getMessage(), "ppmSensitivityTest")));
                             return null;
                         });
 
             } catch (Exception e) {
                 logger.error("Failed to start PPM sensitivity test workflow", e);
-                Dialogs.showErrorMessage("Test Error", "Failed to start PPM sensitivity test: " + e.getMessage());
+                Dialogs.showErrorMessage("Test Error",
+                        DocumentationHelper.withDocLink("Failed to start PPM sensitivity test: " + e.getMessage(), "ppmSensitivityTest"));
             }
         });
     }
@@ -367,7 +369,8 @@ public class PPMSensitivityTestWorkflow {
 
                 if (output.isEmpty() || !outputDir.exists() || !outputDir.isDirectory()) {
                     Dialogs.showErrorMessage(
-                            "Invalid Output Folder", "Please select a valid output folder for the test results.");
+                            "Invalid Output Folder",
+                            DocumentationHelper.withDocLink("Please select a valid output folder for the test results.", "ppmSensitivityTest"));
                     event.consume();
                     return;
                 }
@@ -433,7 +436,8 @@ public class PPMSensitivityTestWorkflow {
                     Platform.runLater(() -> {
                         progressDialog.close();
                         Dialogs.showErrorMessage(
-                                "PPM Sensitivity Test Error", "Failed to execute test: " + ex.getMessage());
+                                "PPM Sensitivity Test Error",
+                                DocumentationHelper.withDocLink("Failed to execute test: " + ex.getMessage(), "ppmSensitivityTest"));
                     });
                     return null;
                 });
@@ -522,7 +526,8 @@ public class PPMSensitivityTestWorkflow {
                         }
                     } catch (IOException e) {
                         logger.error("Failed to open results folder", e);
-                        Dialogs.showErrorMessage("Error", "Could not open folder: " + e.getMessage());
+                        Dialogs.showErrorMessage("Error",
+                                DocumentationHelper.withDocLink("Could not open folder: " + e.getMessage(), "ppmSensitivityTest"));
                     }
                 }
             });
@@ -533,7 +538,8 @@ public class PPMSensitivityTestWorkflow {
             // Close progress dialog and show error (on FX thread)
             Platform.runLater(() -> {
                 progressDialog.close();
-                Dialogs.showErrorMessage("Test Failed", "Failed to complete PPM sensitivity test:\n" + e.getMessage());
+                Dialogs.showErrorMessage("Test Failed",
+                        DocumentationHelper.withDocLink("Failed to complete PPM sensitivity test:\n" + e.getMessage(), "ppmSensitivityTest"));
             });
         }
         // Note: Don't disconnect - we're using the shared MicroscopeController connection

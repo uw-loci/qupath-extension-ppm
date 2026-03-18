@@ -74,14 +74,16 @@ public class PolarizerCalibrationWorkflow {
                         .exceptionally(ex -> {
                             logger.error("Error in polarizer calibration dialog", ex);
                             Platform.runLater(() -> Dialogs.showErrorMessage(
-                                    "Calibration Error", "Failed to show calibration dialog: " + ex.getMessage()));
+                                    "Calibration Error",
+                                    DocumentationHelper.withDocLink("Failed to show calibration dialog: " + ex.getMessage(), "polarizerCalibration")));
                             return null;
                         });
 
             } catch (Exception e) {
                 logger.error("Failed to start polarizer calibration workflow", e);
                 Dialogs.showErrorMessage(
-                        "Calibration Error", "Failed to start polarizer calibration: " + e.getMessage());
+                        "Calibration Error",
+                        DocumentationHelper.withDocLink("Failed to start polarizer calibration: " + e.getMessage(), "polarizerCalibration"));
             }
         });
     }
@@ -252,7 +254,8 @@ public class PolarizerCalibrationWorkflow {
 
                 if (output.isEmpty() || !outputDir.exists() || !outputDir.isDirectory()) {
                     Dialogs.showErrorMessage(
-                            "Invalid Output Folder", "Please select a valid output folder for the calibration report.");
+                            "Invalid Output Folder",
+                            DocumentationHelper.withDocLink("Please select a valid output folder for the calibration report.", "polarizerCalibration"));
                     event.consume();
                     return;
                 }
@@ -260,7 +263,8 @@ public class PolarizerCalibrationWorkflow {
                 double step = stepSizeSpinner.getValue();
 
                 if (step <= 0 || step > 10.0) {
-                    Dialogs.showErrorMessage("Invalid Step Size", "Step size must be between 0.5 and 10.0 degrees.");
+                    Dialogs.showErrorMessage("Invalid Step Size",
+                            DocumentationHelper.withDocLink("Step size must be between 0.5 and 10.0 degrees.", "polarizerCalibration"));
                     event.consume();
                     return;
                 }
@@ -339,7 +343,8 @@ public class PolarizerCalibrationWorkflow {
                     Platform.runLater(() -> {
                         progressDialog.close();
                         Dialogs.showErrorMessage(
-                                "Polarizer Calibration Error", "Failed to execute calibration: " + ex.getMessage());
+                                "Polarizer Calibration Error",
+                                DocumentationHelper.withDocLink("Failed to execute calibration: " + ex.getMessage(), "polarizerCalibration"));
                     });
                     return null;
                 });
@@ -461,7 +466,8 @@ public class PolarizerCalibrationWorkflow {
                         }
                     } catch (IOException e) {
                         logger.error("Failed to open report folder", e);
-                        Dialogs.showErrorMessage("Error", "Could not open folder: " + e.getMessage());
+                        Dialogs.showErrorMessage("Error",
+                                DocumentationHelper.withDocLink("Could not open folder: " + e.getMessage(), "polarizerCalibration"));
                     }
                 }
             });
@@ -473,7 +479,8 @@ public class PolarizerCalibrationWorkflow {
             Platform.runLater(() -> {
                 progressDialog.close();
                 Dialogs.showErrorMessage(
-                        "Calibration Failed", "Failed to complete polarizer calibration:\n" + e.getMessage());
+                        "Calibration Failed",
+                        DocumentationHelper.withDocLink("Failed to complete polarizer calibration:\n" + e.getMessage(), "polarizerCalibration"));
             });
         }
         // Note: Don't disconnect - we're using the shared MicroscopeController connection
