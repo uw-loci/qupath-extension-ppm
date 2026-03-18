@@ -46,6 +46,7 @@ import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager.PPMAnalysisSet;
 import qupath.fx.dialogs.Dialogs;
+import qupath.lib.analysis.images.ContourTracing;
 import qupath.lib.classifiers.pixel.PixelClassifier;
 import qupath.lib.common.ColorTools;
 import qupath.lib.gui.QuPathGUI;
@@ -62,6 +63,7 @@ import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.regions.ImagePlane;
 import qupath.lib.regions.RegionRequest;
+import qupath.lib.roi.GeometryTools;
 import qupath.lib.roi.ROIs;
 import qupath.lib.roi.interfaces.ROI;
 import qupath.opencv.ml.pixel.PixelClassifierTools;
@@ -966,19 +968,48 @@ public class PPMPerpendicularityWorkflow {
     }
 
     /**
+     * A contiguous run of contour points with the same TACS classification.
+     */
+    private static class TACSSegment {
+        int tacsClass;
+        final List<Double> xCoords = new ArrayList<>();
+        final List<Double> yCoords = new ArrayList<>();
+
+        TACSSegment(int tacsClass) {
+            this.tacsClass = tacsClass;
+        }
+
+        void add(double x, double y) {
+            xCoords.add(x);
+            yCoords.add(y);
+        }
+
+        int size() {
+            return xCoords.size();
+        }
+
+        void absorb(TACSSegment other) {
+            xCoords.addAll(other.xCoords);
+            yCoords.addAll(other.yCoords);
+        }
+    }
+
+    /**
      * Creates TACS-2 and TACS-3 Polyline annotations from per-contour-pixel classification.
      *
+     * <p>Uses a two-pass approach: first collects contiguous runs of the same TACS class,
+     * then merges short segments into adjacent same-class neighbors before creating
+     * polylines. This prevents gaps where short noisy segments are filtered out.</p>
+     *
      * <p>Contour points are translated from cropped-region coordinates to full-image
-     * coordinates. Points on the image border are excluded (analyzing fiber orientation
-     * at an image edge is not meaningful). Contiguous runs of the same TACS class
-     * become individual Polyline annotations.</p>
+     * coordinates. Points on the image border are excluded.</p>
      *
      * @param result JSON result from Python analysis
      * @param offsetX X offset of cropped region in full image
      * @param offsetY Y offset of cropped region in full image
      * @param imageW full image width (for border filtering)
      * @param imageH full image height (for border filtering)
-     * @param minSegmentLength minimum number of points for a polyline segment (shorter segments are discarded)
+     * @param minSegmentLength minimum number of points for a polyline segment
      * @return list of Polyline PathObjects (may be empty)
      */
     private static List<PathObject> createTACSPolylines(
@@ -1004,11 +1035,10 @@ public class PPMPerpendicularityWorkflow {
 
         double margin = IMAGE_BORDER_MARGIN_PX;
 
-        // Walk the contour and group contiguous runs of the same class,
-        // splitting at image-border points
-        List<Double> segX = new ArrayList<>();
-        List<Double> segY = new ArrayList<>();
-        int currentClass = -1;
+        // Pass 1: Collect contiguous runs of the same class, splitting at borders.
+        // Border points create null-separator entries in the list.
+        List<TACSSegment> segments = new ArrayList<>();
+        TACSSegment current = null;
 
         for (int i = 0; i < n; i++) {
             JsonArray pt = pointsArr.get(i).getAsJsonArray();
@@ -1016,37 +1046,66 @@ public class PPMPerpendicularityWorkflow {
             double py = pt.get(1).getAsDouble() + offsetY;
             int tacsClass = classArr.get(i).getAsInt();
 
-            // Skip points on the image border
+            // Border points act as hard breaks
             if (px < margin || py < margin || px > imageW - margin || py > imageH - margin) {
-                // Flush current segment if non-empty and long enough
-                if (segX.size() >= minSegmentLength) {
-                    PathObject polyline = buildPolyline(segX, segY, currentClass == 3 ? tacs3Class : tacs2Class);
-                    if (polyline != null) polylines.add(polyline);
+                if (current != null && current.size() > 0) {
+                    segments.add(current);
+                    current = null;
                 }
-                segX.clear();
-                segY.clear();
-                currentClass = -1;
+                // Add null separator to prevent merging across border gaps
+                if (!segments.isEmpty() && segments.get(segments.size() - 1) != null) {
+                    segments.add(null);
+                }
                 continue;
             }
 
-            if (tacsClass != currentClass && !segX.isEmpty()) {
-                // Class changed - flush previous segment if long enough
-                if (segX.size() >= minSegmentLength) {
-                    PathObject polyline = buildPolyline(segX, segY, currentClass == 3 ? tacs3Class : tacs2Class);
-                    if (polyline != null) polylines.add(polyline);
+            if (current == null || tacsClass != current.tacsClass) {
+                if (current != null && current.size() > 0) {
+                    segments.add(current);
                 }
-                segX.clear();
-                segY.clear();
+                current = new TACSSegment(tacsClass);
             }
 
-            currentClass = tacsClass;
-            segX.add(px);
-            segY.add(py);
+            current.add(px, py);
+        }
+        if (current != null && current.size() > 0) {
+            segments.add(current);
         }
 
-        // Flush final segment if long enough
-        if (segX.size() >= minSegmentLength) {
-            PathObject polyline = buildPolyline(segX, segY, currentClass == 3 ? tacs3Class : tacs2Class);
+        // Pass 2: Merge short segments into adjacent same-class neighbors.
+        // If segment[i] is short and segment[i-1] and segment[i+1] have the
+        // same class, absorb it and merge all three.
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (int i = 1; i < segments.size() - 1; i++) {
+                TACSSegment seg = segments.get(i);
+                if (seg == null) continue;
+                if (seg.size() >= minSegmentLength) continue;
+
+                TACSSegment prev = segments.get(i - 1);
+                TACSSegment next = segments.get(i + 1);
+                if (prev == null || next == null) continue;
+
+                if (prev.tacsClass == next.tacsClass) {
+                    // Absorb short segment and next into prev
+                    prev.absorb(seg);
+                    prev.absorb(next);
+                    segments.remove(i + 1);
+                    segments.remove(i);
+                    changed = true;
+                    break; // restart scan after modification
+                }
+            }
+        }
+
+        // Pass 3: Create polylines from segments that meet minimum length
+        for (TACSSegment seg : segments) {
+            if (seg == null) continue;
+            if (seg.size() < minSegmentLength) continue;
+
+            PathClass pathClass = seg.tacsClass == 3 ? tacs3Class : tacs2Class;
+            PathObject polyline = buildPolyline(seg.xCoords, seg.yCoords, pathClass);
             if (polyline != null) polylines.add(polyline);
         }
 
@@ -1271,16 +1330,33 @@ public class PPMPerpendicularityWorkflow {
     }
 
     /**
-     * Creates a detection annotation from a foreground mask.
-     * The mask is thresholded (> 0) and a rectangular detection is created
-     * covering the mask region with the "PPM-Foreground" class.
+     * Creates a detection from a foreground mask using contour tracing.
+     * The mask is converted to a BufferedImage, contours are traced to create
+     * actual geometry matching the thresholded pixels, and a detection is
+     * created with the "PPM-Foreground" class.
      */
     private static PathObject createMaskDetection(byte[] maskBytes, int offsetX, int offsetY, int width, int height) {
         try {
-            // Create a rectangle ROI covering the mask region
-            ROI rectRoi = ROIs.createRectangleROI(offsetX, offsetY, width, height, ImagePlane.getDefaultPlane());
+            // Build a BufferedImage from the mask bytes
+            BufferedImage maskImage = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_GRAY);
+            maskImage.getRaster().setDataElements(0, 0, width, height, maskBytes);
+
+            // Create a RegionRequest for coordinate translation
+            // The mask covers the expanded region starting at (offsetX, offsetY)
+            RegionRequest request = RegionRequest.createInstance("mask", 1.0, offsetX, offsetY, width, height);
+
+            // Trace contours from the binary mask (0/255 values)
+            org.locationtech.jts.geom.Geometry geometry =
+                    ContourTracing.createTracedGeometry(maskImage.getRaster(), 127.5, 255.5, 0, request);
+
+            if (geometry == null || geometry.isEmpty()) {
+                logger.info("Foreground mask is empty after contour tracing");
+                return null;
+            }
+
+            ROI maskRoi = GeometryTools.geometryToROI(geometry, ImagePlane.getDefaultPlane());
             PathClass foregroundClass = PathClass.fromString("PPM-Foreground");
-            PathObject detection = PathObjects.createDetectionObject(rectRoi, foregroundClass);
+            PathObject detection = PathObjects.createDetectionObject(maskRoi, foregroundClass);
 
             // Count foreground pixels for measurement
             int fgCount = 0;

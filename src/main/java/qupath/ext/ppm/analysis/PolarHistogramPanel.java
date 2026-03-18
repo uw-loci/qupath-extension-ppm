@@ -25,7 +25,9 @@ import javafx.scene.text.FontWeight;
 public class PolarHistogramPanel extends VBox {
 
     private static final double CANVAS_SIZE = 360;
-    private static final double MARGIN = 40;
+    private static final double TOP_MARGIN = 20;
+    private static final double BOTTOM_MARGIN = 60;
+    private static final double SIDE_MARGIN = 40;
 
     private final Canvas canvas;
     private final Label statsLabel;
@@ -47,7 +49,7 @@ public class PolarHistogramPanel extends VBox {
         titleLabel = new Label("PPM Polarity Plot");
         titleLabel.setFont(Font.font("System", FontWeight.BOLD, 14));
 
-        canvas = new Canvas(CANVAS_SIZE, CANVAS_SIZE / 2 + MARGIN + 20);
+        canvas = new Canvas(CANVAS_SIZE, CANVAS_SIZE / 2 + TOP_MARGIN + BOTTOM_MARGIN);
 
         statsLabel = new Label();
         statsLabel.setFont(Font.font("Monospaced", 13));
@@ -98,8 +100,8 @@ public class PolarHistogramPanel extends VBox {
 
         // Layout: semi-circle centered horizontally, sitting on a baseline
         double centerX = w / 2;
-        double centerY = h - MARGIN;
-        double radius = Math.min(w / 2 - MARGIN, h - MARGIN - 20);
+        double centerY = h - BOTTOM_MARGIN;
+        double radius = Math.min(w / 2 - SIDE_MARGIN, centerY - TOP_MARGIN);
 
         // Find max count for normalization
         int maxCount = 1;
