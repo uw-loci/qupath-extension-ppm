@@ -161,7 +161,7 @@ A typical PPM acquisition captures 4 images per tile position:
 | 0 deg (crossed) | Baseline crossed polarizer position |
 | +theta | Positive rotation angle |
 | -theta | Negative rotation angle |
-| 45+ deg (uncrossed) | Parallel polarizer reference |
+| ~90 deg (uncrossed) | Parallel polarizer reference |
 
 The birefringence signal is computed from the difference between +theta and -theta images.
 
