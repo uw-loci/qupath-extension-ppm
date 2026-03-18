@@ -293,6 +293,12 @@ public class PPMBatchAnalysisWorkflow {
                 return;
             }
 
+            // Persist user-modified values for next session
+            if (panel.isPerpendicularitySelected()) {
+                PPMPreferences.setDilationUm(panel.getDilationUm());
+                PPMPreferences.setTacsThresholdDeg(panel.getTacsThreshold());
+            }
+
             dialog.close();
 
             cancelled.set(false);
@@ -743,7 +749,7 @@ public class PPMBatchAnalysisWorkflow {
             RegionRequest birefRequest = RegionRequest.createInstance(birefServer.getPath(), 1.0, x, y, w, h);
             BufferedImage birefRegion = birefServer.readRegion(birefRequest);
             birefServer.close();
-            return PPMPerpendicularityWorkflow.bufferedImageToGrayNDArray(birefRegion);
+            return PPMPerpendicularityWorkflow.bufferedImageToGray16NDArray(birefRegion);
         } catch (Exception e) {
             logger.debug("Could not read biref region: {}", e.getMessage());
             return null;

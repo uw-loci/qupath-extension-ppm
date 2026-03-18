@@ -172,10 +172,10 @@ public class PPMBatchAnalysisPanel extends VBox {
         dilationSpinner = new Spinner<>(
                 new SpinnerValueFactory.DoubleSpinnerValueFactory(1, 500, PPMPreferences.getDilationUm(), 5));
         dilationSpinner.setEditable(true);
-        dilationSpinner.setTooltip(
-                new Tooltip("Distance (in um) to dilate from the boundary for the perpendicularity analysis zone.\n"
-                        + "Only fibers within this distance from the boundary are analyzed.\n"
-                        + "Larger values include fibers further from the boundary."));
+        dilationSpinner.setTooltip(new Tooltip("Range: 1-500 um. Distance from the boundary within which\n"
+                + "fibers are analyzed for TACS classification.\n\n"
+                + "Increase for broad stromal regions; decrease for tight\n"
+                + "peri-tumoral analysis near the boundary."));
         perpGrid.add(dilationSpinner, 1, row);
         row++;
 
@@ -183,9 +183,11 @@ public class PPMBatchAnalysisPanel extends VBox {
         zoneModeChoice.getItems().addAll("outside", "inside", "both");
         zoneModeChoice.setValue("outside");
         zoneModeChoice.setTooltip(new Tooltip("Which side of the boundary to analyze:\n"
-                + "  'outside' - analyze fibers outside the boundary annotation\n"
-                + "  'inside' - analyze fibers inside the boundary annotation\n"
-                + "  'both' - analyze fibers on both sides of the boundary"));
+                + "  'outside' - stroma outside the boundary (most common)\n"
+                + "  'inside' - tissue inside the boundary annotation\n"
+                + "  'both' - fibers on both sides of the boundary\n\n"
+                + "For tumor/stroma boundaries, 'outside' analyzes the\n"
+                + "peri-tumoral stroma where TACS patterns are most relevant."));
         perpGrid.add(zoneModeChoice, 1, row);
         row++;
 
@@ -193,17 +195,19 @@ public class PPMBatchAnalysisPanel extends VBox {
         tacsThresholdSpinner = new Spinner<>(
                 new SpinnerValueFactory.DoubleSpinnerValueFactory(5, 85, PPMPreferences.getTacsThresholdDeg(), 5));
         tacsThresholdSpinner.setEditable(true);
-        tacsThresholdSpinner.setTooltip(new Tooltip("Angle threshold (in deg) for PS-TACS classification.\n"
-                + "Fibers within this angle of being perpendicular to the boundary are\n"
-                + "classified as TACS-3 (aligned perpendicular). Fibers within this angle\n"
-                + "of being parallel are classified as TACS-2 (aligned parallel)."));
+        tacsThresholdSpinner.setTooltip(new Tooltip("Range: 5-85 degrees. Angle cutoff for TACS classification.\n"
+                + "Fibers within this angle of perpendicular -> TACS-3.\n"
+                + "Fibers within this angle of parallel -> TACS-2.\n\n"
+                + "Lower values = stricter classification (fewer fibers classified).\n"
+                + "30 deg is a common default for collagen alignment studies."));
         perpGrid.add(tacsThresholdSpinner, 1, row);
         row++;
 
         fillHolesCheck.setSelected(true);
-        fillHolesCheck.setTooltip(
-                new Tooltip("Fill holes in the boundary annotation before computing perpendicularity.\n"
-                        + "Enable this to treat the boundary as a solid region, ignoring internal gaps."));
+        fillHolesCheck.setTooltip(new Tooltip("Fill internal holes in the boundary annotation before\n"
+                + "computing perpendicularity. Enable (default) to treat the\n"
+                + "boundary as a solid region. Disable only if the holes are\n"
+                + "intentional features to analyze around."));
         perpGrid.add(fillHolesCheck, 0, row, 2, 1);
 
         // Enable/disable perp params based on checkbox

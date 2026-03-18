@@ -175,8 +175,38 @@ public class PPMPerpendicularityWorkflow {
             return;
         }
 
-        // Find calibration
+        // Validate the current image is the sum image
         ProjectImageEntry<BufferedImage> currentEntry = project.getEntry(imageData);
+        if (currentEntry != null) {
+            String angle = currentEntry.getMetadata().get("angle");
+            String imageName = currentEntry.getImageName();
+            boolean isSum = (angle != null && angle.toLowerCase().contains("sum"))
+                    || (imageName != null && imageName.contains("_sum"));
+
+            if (!isSum) {
+                // Check if we can identify the sum image for the user
+                PPMAnalysisSet analysisSetCheck = ImageMetadataManager.findPPMAnalysisSet(currentEntry, project);
+                String sumHint = "";
+                if (analysisSetCheck != null && analysisSetCheck.hasSumImage()) {
+                    sumHint = "\n\nThe sum image in this set is:\n  " + analysisSetCheck.sumImage.getImageName();
+                }
+
+                Dialogs.showErrorMessage(
+                        "Surface Perpendicularity Analysis",
+                        DocumentationHelper.withDocLink(
+                                "This analysis must be run on the sum image.\n"
+                                        + "The currently open image ("
+                                        + (imageName != null ? imageName : "unknown")
+                                        + ") does not appear to be a sum image.\n\n"
+                                        + "Open the sum image in the viewer, draw boundary "
+                                        + "annotations on it, then run this analysis again."
+                                        + sumHint,
+                                "ppmPerpendicularity"));
+                return;
+            }
+        }
+
+        // Find calibration
         String calibrationPath = findCalibrationPath(currentEntry, project);
         if (calibrationPath == null) {
             Dialogs.showErrorMessage(
@@ -260,6 +290,19 @@ public class PPMPerpendicularityWorkflow {
 
         int row = 0;
 
+        // Image info header
+        String sumImageName = currentEntry != null ? currentEntry.getImageName() : "unknown";
+        PPMAnalysisSet previewSet =
+                currentEntry != null ? ImageMetadataManager.findPPMAnalysisSet(currentEntry, project) : null;
+        Label imageInfoLabel = new Label("Sum image: " + sumImageName
+                + (previewSet != null && previewSet.hasBirefImage()
+                        ? "\nBirefringence: " + previewSet.birefImage.getImageName()
+                        : "\nBirefringence: not found (threshold masking unavailable)"));
+        imageInfoLabel.setWrapText(true);
+        imageInfoLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #555;");
+        grid.add(imageInfoLabel, 0, row, 3, 1);
+        row++;
+
         // Annotation class selector
         grid.add(new Label("Boundary annotation class:"), 0, row);
         ChoiceBox<String> classChoice = new ChoiceBox<>();
@@ -290,6 +333,13 @@ public class PPMPerpendicularityWorkflow {
         Spinner<Double> dilationSpinner =
                 new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(1, 500, getDefaultDilationUm(), 5));
         dilationSpinner.setEditable(true);
+        Tooltip dilationTip = new Tooltip("Range: 1-500 um. Distance from the boundary annotation\n"
+                + "edge within which fibers are analyzed. Only fibers within\n"
+                + "this zone are included in TACS classification.\n\n"
+                + "Increase for broad stromal regions; decrease for tight\n"
+                + "peri-tumoral analysis near the boundary.");
+        dilationTip.setShowDelay(Duration.millis(400));
+        dilationSpinner.setTooltip(dilationTip);
         grid.add(dilationSpinner, 1, row);
         row++;
 
@@ -298,6 +348,14 @@ public class PPMPerpendicularityWorkflow {
         ChoiceBox<String> zoneChoice = new ChoiceBox<>();
         zoneChoice.getItems().addAll("outside", "inside", "both");
         zoneChoice.setValue("outside");
+        Tooltip zoneModeTip = new Tooltip("Which side of the boundary to analyze:\n"
+                + "  'outside' - stroma outside the boundary (most common)\n"
+                + "  'inside' - tissue inside the boundary annotation\n"
+                + "  'both' - fibers on both sides of the boundary\n\n"
+                + "For tumor/stroma boundaries, 'outside' analyzes the\n"
+                + "peri-tumoral stroma where TACS patterns are most relevant.");
+        zoneModeTip.setShowDelay(Duration.millis(400));
+        zoneChoice.setTooltip(zoneModeTip);
         grid.add(zoneChoice, 1, row);
         row++;
 
@@ -306,12 +364,26 @@ public class PPMPerpendicularityWorkflow {
         Spinner<Double> tacsSpinner =
                 new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(5, 85, getDefaultTacsThreshold(), 5));
         tacsSpinner.setEditable(true);
+        Tooltip tacsTip = new Tooltip("Range: 5-85 degrees. Angle cutoff for TACS classification.\n"
+                + "Fibers within this angle of perpendicular -> TACS-3.\n"
+                + "Fibers within this angle of parallel -> TACS-2.\n"
+                + "Fibers in between are unclassified.\n\n"
+                + "Lower values = stricter classification (fewer fibers classified).\n"
+                + "30 deg is a common default for collagen alignment studies.");
+        tacsTip.setShowDelay(Duration.millis(400));
+        tacsSpinner.setTooltip(tacsTip);
         grid.add(tacsSpinner, 1, row);
         row++;
 
         // Fill holes
         CheckBox fillHolesBox = new CheckBox("Fill holes in boundary");
         fillHolesBox.setSelected(true);
+        Tooltip fillHolesTip = new Tooltip("Fill internal holes in the boundary annotation before\n"
+                + "computing perpendicularity. Enable this (default) to treat\n"
+                + "the boundary as a solid region. Disable only if the holes\n"
+                + "are intentional features to analyze around.");
+        fillHolesTip.setShowDelay(Duration.millis(400));
+        fillHolesBox.setTooltip(fillHolesTip);
         grid.add(fillHolesBox, 0, row, 2, 1);
         row++;
 
@@ -326,8 +398,18 @@ public class PPMPerpendicularityWorkflow {
         RadioButton thresholdRadio = new RadioButton("Intensity thresholds");
         thresholdRadio.setToggleGroup(foregroundToggle);
         thresholdRadio.setSelected(true);
+        Tooltip threshRadioTip = new Tooltip("Use birefringence intensity and HSV thresholds to\n"
+                + "identify collagen-containing pixels. Requires a biref\n"
+                + "sibling image in the PPM analysis set.");
+        threshRadioTip.setShowDelay(Duration.millis(400));
+        thresholdRadio.setTooltip(threshRadioTip);
         RadioButton classifierRadio = new RadioButton("Pixel classifier");
         classifierRadio.setToggleGroup(foregroundToggle);
+        Tooltip classifierRadioTip = new Tooltip("Use a trained QuPath pixel classifier or thresholder\n"
+                + "to define foreground. Create one via Classify > Pixel\n"
+                + "classification in QuPath before using this option.");
+        classifierRadioTip.setShowDelay(Duration.millis(400));
+        classifierRadio.setTooltip(classifierRadioTip);
         HBox radioBox = new HBox(15, thresholdRadio, classifierRadio);
         grid.add(radioBox, 0, row, 3, 1);
         row++;
@@ -336,12 +418,15 @@ public class PPMPerpendicularityWorkflow {
         Label birefLabel = new Label("Birefringence threshold:");
         grid.add(birefLabel, 0, row);
         Spinner<Double> birefSpinner =
-                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 1000, getBirefThreshold(), 10));
+                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 65535, getBirefThreshold(), 100));
         birefSpinner.setEditable(true);
-        Tooltip birefTip = new Tooltip("Minimum birefringence image intensity for a pixel to be\n"
-                + "considered PPM-positive (collagen). Pixels below this\n"
-                + "value are excluded from analysis. Only applies when a\n"
-                + "birefringence sibling image is found.");
+        Tooltip birefTip = new Tooltip("Range: 0-65535 (16-bit image intensity). Minimum birefringence\n"
+                + "intensity for a pixel to be considered PPM-positive (collagen).\n"
+                + "Pixels below this value are excluded from analysis.\n"
+                + "Only applies when a birefringence sibling image is found.\n\n"
+                + "Increase to exclude weakly birefringent background;\n"
+                + "decrease to include more tissue. Typical range: 500-10000\n"
+                + "depending on sample brightness and imaging conditions.");
         birefTip.setShowDelay(Duration.millis(400));
         birefSpinner.setTooltip(birefTip);
         grid.add(birefSpinner, 1, row);
@@ -352,8 +437,11 @@ public class PPMPerpendicularityWorkflow {
         Spinner<Double> satSpinner = new Spinner<>(
                 new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 1, PPMPreferences.getSaturationThreshold(), 0.05));
         satSpinner.setEditable(true);
-        Tooltip satTip = new Tooltip("Minimum HSV saturation (0-1) for a pixel to have a\n"
-                + "meaningful hue/orientation. Filters out grayscale pixels.");
+        Tooltip satTip = new Tooltip("Range: 0-1. Minimum HSV saturation for a pixel to have a\n"
+                + "meaningful hue/orientation. Filters out grayscale pixels\n"
+                + "that lack color information for angle measurement.\n\n"
+                + "Increase to exclude weakly colored pixels; decrease to\n"
+                + "include more tissue. Default 0.2 works for most samples.");
         satTip.setShowDelay(Duration.millis(400));
         satSpinner.setTooltip(satTip);
         grid.add(satSpinner, 1, row);
@@ -364,8 +452,10 @@ public class PPMPerpendicularityWorkflow {
         Spinner<Double> valSpinner = new Spinner<>(
                 new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 1, PPMPreferences.getValueThreshold(), 0.05));
         valSpinner.setEditable(true);
-        Tooltip valTip = new Tooltip(
-                "Minimum HSV brightness (0-1) for a pixel to be included.\n" + "Filters out dark/shadow pixels.");
+        Tooltip valTip = new Tooltip("Range: 0-1. Minimum HSV brightness for a pixel to be\n"
+                + "included in analysis. Filters out dark/shadow pixels.\n\n"
+                + "Increase to exclude dim regions; decrease to include\n"
+                + "darker tissue areas. Default 0.2 works for most samples.");
         valTip.setShowDelay(Duration.millis(400));
         valSpinner.setTooltip(valTip);
         grid.add(valSpinner, 1, row);
@@ -452,6 +542,13 @@ public class PPMPerpendicularityWorkflow {
             double valThreshold = valSpinner.getValue();
             boolean useClassifier = classifierRadio.isSelected();
             String selectedClassifier = classifierChoice.getValue();
+
+            // Persist user-modified values for next session
+            PPMPreferences.setDilationUm(dilationUm);
+            PPMPreferences.setTacsThresholdDeg(tacsThreshold);
+            PPMPreferences.setBirefringenceThreshold(birefThreshold);
+            PPMPreferences.setSaturationThreshold(satThreshold);
+            PPMPreferences.setValueThreshold(valThreshold);
 
             // Validate classifier selection
             if (useClassifier && ("(none available)".equals(selectedClassifier) || selectedClassifier == null)) {
@@ -696,7 +793,7 @@ public class PPMPerpendicularityWorkflow {
                     RegionRequest birefRequest = RegionRequest.createInstance(
                             birefServer.getPath(), 1.0, expandedX, expandedY, expandedW, expandedH);
                     BufferedImage birefRegion = birefServer.readRegion(birefRequest);
-                    birefNDArray = bufferedImageToGrayNDArray(birefRegion);
+                    birefNDArray = bufferedImageToGray16NDArray(birefRegion);
                     birefServer.close();
                 } catch (Exception e) {
                     logger.warn("Could not read biref sibling: {}", e.getMessage());
@@ -976,6 +1073,7 @@ public class PPMPerpendicularityWorkflow {
 
     /**
      * Converts a grayscale BufferedImage to an Appose NDArray (H, W) uint8.
+     * Suitable for binary masks and 8-bit grayscale images.
      */
     static NDArray bufferedImageToGrayNDArray(BufferedImage img) {
         int h = img.getHeight();
@@ -990,6 +1088,26 @@ public class PPMPerpendicularityWorkflow {
             }
         }
         buf.flip();
+        return ndArray;
+    }
+
+    /**
+     * Converts a grayscale BufferedImage to an Appose NDArray (H, W) uint16.
+     * Required for 16-bit images such as birefringence data where values exceed 255.
+     */
+    static NDArray bufferedImageToGray16NDArray(BufferedImage img) {
+        int h = img.getHeight();
+        int w = img.getWidth();
+        NDArray.Shape shape = new NDArray.Shape(NDArray.Shape.Order.C_ORDER, h, w);
+        NDArray ndArray = new NDArray(NDArray.DType.UINT16, shape);
+        java.nio.ShortBuffer buf =
+                ndArray.buffer().order(java.nio.ByteOrder.LITTLE_ENDIAN).asShortBuffer();
+        Raster raster = img.getRaster();
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                buf.put((short) raster.getSample(x, y, 0));
+            }
+        }
         return ndArray;
     }
 

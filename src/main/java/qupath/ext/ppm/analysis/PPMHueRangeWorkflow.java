@@ -169,6 +169,9 @@ public class PPMHueRangeWorkflow {
 
         // Wire detection creation
         panel.setOnCreateDetections(() -> {
+            // Persist threshold values for next session
+            PPMPreferences.setSaturationThreshold(panel.getSaturationThreshold());
+            PPMPreferences.setValueThreshold(panel.getValueThreshold());
             createDetections(panel, server, calibration, imageData);
         });
 

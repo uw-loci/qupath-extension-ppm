@@ -105,9 +105,38 @@ public class PPMPolarityPlotWorkflow {
             return;
         }
 
-        // Find calibration
+        // Validate the current image is the sum image
         Project<BufferedImage> project = gui.getProject();
         ProjectImageEntry<BufferedImage> currentEntry = project != null ? project.getEntry(imageData) : null;
+
+        if (currentEntry != null) {
+            String angle = currentEntry.getMetadata().get("angle");
+            String imageName = currentEntry.getImageName();
+            boolean isSum = (angle != null && angle.toLowerCase().contains("sum"))
+                    || (imageName != null && imageName.contains("_sum"));
+
+            if (!isSum) {
+                PPMAnalysisSet analysisSetCheck =
+                        project != null ? ImageMetadataManager.findPPMAnalysisSet(currentEntry, project) : null;
+                String sumHint = "";
+                if (analysisSetCheck != null && analysisSetCheck.hasSumImage()) {
+                    sumHint = "\n\nThe sum image in this set is:\n  " + analysisSetCheck.sumImage.getImageName();
+                }
+
+                Dialogs.showErrorMessage(
+                        "PPM Polarity Plot",
+                        DocumentationHelper.withDocLink(
+                                "This analysis must be run on the sum image.\n"
+                                        + "The currently open image ("
+                                        + (imageName != null ? imageName : "unknown")
+                                        + ") does not appear to be a sum image.\n\n"
+                                        + "Open the sum image in the viewer, select an "
+                                        + "annotation, then run this analysis again."
+                                        + sumHint,
+                                "ppmPolarityPlot"));
+                return;
+            }
+        }
 
         PPMAnalysisSet analysisSet = null;
         if (currentEntry != null && project != null) {
@@ -195,7 +224,7 @@ public class PPMPolarityPlotWorkflow {
                     ImageServer<BufferedImage> birefServer = birefData.getServer();
                     RegionRequest birefRequest = RegionRequest.createInstance(birefServer.getPath(), 1.0, x, y, w, h);
                     BufferedImage birefRegion = birefServer.readRegion(birefRequest);
-                    birefNDArray = PPMPerpendicularityWorkflow.bufferedImageToGrayNDArray(birefRegion);
+                    birefNDArray = PPMPerpendicularityWorkflow.bufferedImageToGray16NDArray(birefRegion);
                     birefServer.close();
                     logger.info("Read biref region for polarity analysis");
                 } catch (Exception e) {
