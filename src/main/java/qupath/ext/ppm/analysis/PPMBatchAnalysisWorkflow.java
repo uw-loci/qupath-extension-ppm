@@ -116,7 +116,8 @@ public class PPMBatchAnalysisWorkflow {
                     "Batch PPM Analysis",
                     DocumentationHelper.withDocLink(
                             "No qualified PPM analysis sets found in this project.\n\n"
-                                    + "Requirements: PPM modality images with a sum image and calibration.",
+                                    + "Requirements: PPM modality images with at least one angle image\n"
+                                    + "and a calibration file.",
                             "ppmBatchAnalysis"));
             return;
         }
@@ -150,7 +151,8 @@ public class PPMBatchAnalysisWorkflow {
         for (Map.Entry<String, List<ProjectImageEntry<BufferedImage>>> groupEntry : groups.entrySet()) {
             List<ProjectImageEntry<BufferedImage>> members = groupEntry.getValue();
 
-            ProjectImageEntry<BufferedImage> sumImage = null;
+            // Find any angle image (non-biref) to use as the RGB color source
+            ProjectImageEntry<BufferedImage> colorImage = null;
             boolean hasBiref = false;
             String calibrationPath = null;
 
@@ -158,10 +160,11 @@ public class PPMBatchAnalysisWorkflow {
                 String angle = member.getMetadata().get(ImageMetadataManager.ANGLE);
                 String name = member.getImageName().toLowerCase();
 
-                if (isSumImage(angle, name)) {
-                    sumImage = member;
-                } else if (isBirefImage(angle, name)) {
+                if (isBirefImage(angle, name)) {
                     hasBiref = true;
+                } else if (colorImage == null) {
+                    // First non-biref angle image becomes the color source
+                    colorImage = member;
                 }
 
                 String cal = member.getMetadata().get(ImageMetadataManager.PPM_CALIBRATION);
@@ -177,31 +180,31 @@ public class PPMBatchAnalysisWorkflow {
                 }
             }
 
-            if (sumImage == null || calibrationPath == null) {
+            if (colorImage == null || calibrationPath == null) {
                 logger.debug(
-                        "Skipping group {} - sum={}, cal={}",
+                        "Skipping group {} - colorImage={}, cal={}",
                         groupEntry.getKey(),
-                        sumImage != null ? "yes" : "no",
+                        colorImage != null ? "yes" : "no",
                         calibrationPath != null ? "yes" : "no");
                 continue;
             }
 
             int annotationCount = 0;
             try {
-                ImageData<BufferedImage> imgData = (ImageData<BufferedImage>) sumImage.readImageData();
+                ImageData<BufferedImage> imgData = (ImageData<BufferedImage>) colorImage.readImageData();
                 annotationCount = imgData.getHierarchy().getAnnotationObjects().size();
             } catch (Exception e) {
-                logger.debug("Could not read annotations for {}: {}", sumImage.getImageName(), e.getMessage());
+                logger.debug("Could not read annotations for {}: {}", colorImage.getImageName(), e.getMessage());
             }
 
-            int collection = ImageMetadataManager.getImageCollection(sumImage);
-            String sample = ImageMetadataManager.getSampleName(sumImage);
-            String annotation = sumImage.getMetadata().get(ImageMetadataManager.ANNOTATION_NAME);
+            int collection = ImageMetadataManager.getImageCollection(colorImage);
+            String sample = ImageMetadataManager.getSampleName(colorImage);
+            String annotation = colorImage.getMetadata().get(ImageMetadataManager.ANNOTATION_NAME);
 
             String display = String.format(
                     "[%d] %s%s%s (%d annotations%s)",
                     collection,
-                    sumImage.getImageName(),
+                    colorImage.getImageName(),
                     sample != null ? " | " + sample : "",
                     annotation != null ? " | " + annotation : "",
                     annotationCount,
@@ -209,7 +212,7 @@ public class PPMBatchAnalysisWorkflow {
 
             items.add(new PPMBatchAnalysisPanel.AnalysisSetItem(
                     display,
-                    sumImage.getImageName(),
+                    colorImage.getImageName(),
                     collection,
                     sample,
                     annotation,
@@ -405,27 +408,27 @@ public class PPMBatchAnalysisWorkflow {
                         String.format("Set %d/%d: %s", setNum, totalSets, item.imageName),
                         (double) setIdx / totalSets);
 
-                ProjectImageEntry<BufferedImage> sumEntry = null;
+                ProjectImageEntry<BufferedImage> colorEntry = null;
                 for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
                     if (entry.getImageName().equals(item.imageName)) {
-                        sumEntry = entry;
+                        colorEntry = entry;
                         break;
                     }
                 }
-                if (sumEntry == null) {
-                    logger.warn("Could not find sum image entry: {}", item.imageName);
+                if (colorEntry == null) {
+                    logger.warn("Could not find color image entry: {}", item.imageName);
                     errors++;
                     continue;
                 }
 
                 try {
-                    ImageData<BufferedImage> imageData = (ImageData<BufferedImage>) sumEntry.readImageData();
-                    ImageServer<BufferedImage> sumServer = imageData.getServer();
+                    ImageData<BufferedImage> imageData = (ImageData<BufferedImage>) colorEntry.readImageData();
+                    ImageServer<BufferedImage> colorServer = imageData.getServer();
 
-                    PixelCalibration pixelCal = sumServer.getPixelCalibration();
+                    PixelCalibration pixelCal = colorServer.getPixelCalibration();
                     double pixelSizeUm = pixelCal.hasPixelSizeMicrons() ? pixelCal.getAveragedPixelSizeMicrons() : 1.0;
 
-                    PPMAnalysisSet analysisSet = ImageMetadataManager.findPPMAnalysisSet(sumEntry, project);
+                    PPMAnalysisSet analysisSet = ImageMetadataManager.findPPMAnalysisSet(colorEntry, project);
 
                     Collection<PathObject> annotations =
                             imageData.getHierarchy().getAnnotationObjects();
@@ -463,7 +466,7 @@ public class PPMBatchAnalysisWorkflow {
 
                             try {
                                 JsonObject polarityResult =
-                                        runPolarityForAnnotation(sumServer, roi, item.calibrationPath, analysisSet);
+                                        runPolarityForAnnotation(colorServer, roi, item.calibrationPath, analysisSet);
 
                                 writer.storePolarityMeasurements(annotation, polarityResult);
                                 writer.addPolarityRow(
@@ -510,7 +513,7 @@ public class PPMBatchAnalysisWorkflow {
 
                             try {
                                 JsonObject perpResult = runPerpendicularityForAnnotation(
-                                        sumServer,
+                                        colorServer,
                                         boundary.getROI(),
                                         item.calibrationPath,
                                         analysisSet,
@@ -541,7 +544,7 @@ public class PPMBatchAnalysisWorkflow {
                         }
                     }
 
-                    sumEntry.saveImageData(imageData);
+                    colorEntry.saveImageData(imageData);
 
                 } catch (Exception e) {
                     logger.error("Failed to process set {}: {}", item.imageName, e.getMessage(), e);
@@ -597,7 +600,7 @@ public class PPMBatchAnalysisWorkflow {
     // ========================================================================
 
     private static JsonObject runPolarityForAnnotation(
-            ImageServer<BufferedImage> sumServer, ROI roi, String calibrationPath, PPMAnalysisSet analysisSet)
+            ImageServer<BufferedImage> colorServer, ROI roi, String calibrationPath, PPMAnalysisSet analysisSet)
             throws Exception {
 
         int x = (int) roi.getBoundsX();
@@ -605,15 +608,15 @@ public class PPMBatchAnalysisWorkflow {
         int w = (int) Math.ceil(roi.getBoundsWidth());
         int h = (int) Math.ceil(roi.getBoundsHeight());
 
-        RegionRequest request = RegionRequest.createInstance(sumServer.getPath(), 1.0, x, y, w, h);
+        RegionRequest request = RegionRequest.createInstance(colorServer.getPath(), 1.0, x, y, w, h);
 
         NDArray sumNDArray = null;
         NDArray birefNDArray = null;
         NDArray roiNDArray = null;
 
         try {
-            BufferedImage sumRegion = sumServer.readRegion(request);
-            sumNDArray = PPMPerpendicularityWorkflow.bufferedImageToRGBNDArray(sumRegion);
+            BufferedImage colorRegion = colorServer.readRegion(request);
+            sumNDArray = PPMPerpendicularityWorkflow.bufferedImageToRGBNDArray(colorRegion);
 
             birefNDArray = readBirefNDArray(analysisSet, x, y, w, h);
 
@@ -656,7 +659,7 @@ public class PPMBatchAnalysisWorkflow {
     }
 
     private static JsonObject runPerpendicularityForAnnotation(
-            ImageServer<BufferedImage> sumServer,
+            ImageServer<BufferedImage> colorServer,
             ROI roi,
             String calibrationPath,
             PPMAnalysisSet analysisSet,
@@ -677,18 +680,18 @@ public class PPMBatchAnalysisWorkflow {
         int pad = (int) Math.ceil(dilationPx) + 5;
         int expandedX = Math.max(0, x - pad);
         int expandedY = Math.max(0, y - pad);
-        int expandedW = Math.min(sumServer.getWidth() - expandedX, w + 2 * pad);
-        int expandedH = Math.min(sumServer.getHeight() - expandedY, h + 2 * pad);
+        int expandedW = Math.min(colorServer.getWidth() - expandedX, w + 2 * pad);
+        int expandedH = Math.min(colorServer.getHeight() - expandedY, h + 2 * pad);
 
         RegionRequest request =
-                RegionRequest.createInstance(sumServer.getPath(), 1.0, expandedX, expandedY, expandedW, expandedH);
+                RegionRequest.createInstance(colorServer.getPath(), 1.0, expandedX, expandedY, expandedW, expandedH);
 
         NDArray sumNDArray = null;
         NDArray birefNDArray = null;
 
         try {
-            BufferedImage sumRegion = sumServer.readRegion(request);
-            sumNDArray = PPMPerpendicularityWorkflow.bufferedImageToRGBNDArray(sumRegion);
+            BufferedImage colorRegion = colorServer.readRegion(request);
+            sumNDArray = PPMPerpendicularityWorkflow.bufferedImageToRGBNDArray(colorRegion);
 
             birefNDArray = readBirefNDArray(analysisSet, expandedX, expandedY, expandedW, expandedH);
 
@@ -762,11 +765,6 @@ public class PPMBatchAnalysisWorkflow {
             label.setText(text);
             bar.setProgress(progress);
         });
-    }
-
-    private static boolean isSumImage(String angle, String imageName) {
-        if (angle != null && angle.toLowerCase().contains("sum")) return true;
-        return imageName != null && imageName.contains("_sum");
     }
 
     private static boolean isBirefImage(String angle, String imageName) {

@@ -35,6 +35,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import javafx.util.Duration;
+import javax.imageio.ImageIO;
 import org.apposed.appose.NDArray;
 import org.apposed.appose.Service.Task;
 import org.slf4j.Logger;
@@ -109,10 +110,10 @@ public class PPMPerpendicularityWorkflow {
     /** Pixels within this margin of the image border are excluded from TACS polylines. */
     private static final double IMAGE_BORDER_MARGIN_PX = 3.0;
 
-    // TACS-2 = orange (good contrast against H&E purple/pink)
-    private static final int TACS2_COLOR = ColorTools.packRGB(255, 165, 0);
-    // TACS-3 = green (good contrast against H&E eosin)
-    private static final int TACS3_COLOR = ColorTools.packRGB(0, 180, 0);
+    // TACS-2 = neon orange (high visibility on PPM images)
+    private static final int TACS2_COLOR = ColorTools.packRGB(255, 100, 0);
+    // TACS-3 = neon green (high visibility on PPM images)
+    private static final int TACS3_COLOR = ColorTools.packRGB(0, 255, 65);
 
     private static Stage resultWindow;
     private static PPMPerpendicularityPanel resultPanel;
@@ -122,11 +123,17 @@ public class PPMPerpendicularityWorkflow {
         final JsonObject json;
         final int offsetX;
         final int offsetY;
+        final int regionW;
+        final int regionH;
+        final byte[] foregroundMask; // null if not available
 
-        AnnotationResult(JsonObject json, int offsetX, int offsetY) {
+        AnnotationResult(JsonObject json, int offsetX, int offsetY, int regionW, int regionH, byte[] foregroundMask) {
             this.json = json;
             this.offsetX = offsetX;
             this.offsetY = offsetY;
+            this.regionW = regionW;
+            this.regionH = regionH;
+            this.foregroundMask = foregroundMask;
         }
     }
 
@@ -396,6 +403,21 @@ public class PPMPerpendicularityWorkflow {
         grid.add(fillHolesBox, 0, row, 2, 1);
         row++;
 
+        // Minimum polyline length
+        grid.add(new Label("Min TACS segment length (px):"), 0, row);
+        Spinner<Integer> minLengthSpinner = new Spinner<>(
+                new SpinnerValueFactory.IntegerSpinnerValueFactory(2, 500, PPMPreferences.getMinPolylineLengthPx(), 5));
+        minLengthSpinner.setEditable(true);
+        Tooltip minLenTip = new Tooltip("Range: 2-500 pixels. Minimum number of contour points\n"
+                + "for a TACS polyline segment to be drawn. Short fragments\n"
+                + "are usually noise and clutter the overlay.\n\n"
+                + "Increase to show only longer, more reliable segments.\n"
+                + "Decrease to see finer-grained classification detail.");
+        minLenTip.setShowDelay(Duration.millis(400));
+        minLengthSpinner.setTooltip(minLenTip);
+        grid.add(minLengthSpinner, 1, row);
+        row++;
+
         // --- Foreground detection section ---
         Label filterHeader = new Label("Foreground Detection");
         filterHeader.setStyle("-fx-font-weight: bold; -fx-padding: 8 0 2 0;");
@@ -551,6 +573,7 @@ public class PPMPerpendicularityWorkflow {
             double valThreshold = valSpinner.getValue();
             boolean useClassifier = classifierRadio.isSelected();
             String selectedClassifier = classifierChoice.getValue();
+            int minPolylineLength = minLengthSpinner.getValue();
 
             // Persist user-modified values for next session
             PPMPreferences.setDilationUm(dilationUm);
@@ -558,6 +581,7 @@ public class PPMPerpendicularityWorkflow {
             PPMPreferences.setBirefringenceThreshold(birefThreshold);
             PPMPreferences.setSaturationThreshold(satThreshold);
             PPMPreferences.setValueThreshold(valThreshold);
+            PPMPreferences.setMinPolylineLengthPx(minPolylineLength);
 
             // Validate classifier selection
             if (useClassifier && ("(none available)".equals(selectedClassifier) || selectedClassifier == null)) {
@@ -612,6 +636,7 @@ public class PPMPerpendicularityWorkflow {
             final PathObjectHierarchy hierarchy = imageData.getHierarchy();
             final int imageW = sumServer.getWidth();
             final int imageH = sumServer.getHeight();
+            final int finalMinPolylineLength = minPolylineLength;
 
             // Build output dir
             Path projectDir = project.getPath().getParent();
@@ -670,9 +695,33 @@ public class PPMPerpendicularityWorkflow {
                             new Gson().toJson(annResult.json, writer);
                         }
 
+                        // Save foreground mask as B/W PNG and create detection overlay
+                        if (annResult.foregroundMask != null) {
+                            saveForegroundMask(
+                                    annResult.foregroundMask,
+                                    annResult.regionW,
+                                    annResult.regionH,
+                                    annotationOutputDir);
+
+                            PathObject maskDetection = createMaskDetection(
+                                    annResult.foregroundMask,
+                                    annResult.offsetX,
+                                    annResult.offsetY,
+                                    annResult.regionW,
+                                    annResult.regionH);
+                            if (maskDetection != null) {
+                                allTacsPolylines.add(maskDetection);
+                            }
+                        }
+
                         // Create TACS polyline annotations from contour data
                         List<PathObject> polylines = createTACSPolylines(
-                                annResult.json, annResult.offsetX, annResult.offsetY, imageW, imageH);
+                                annResult.json,
+                                annResult.offsetX,
+                                annResult.offsetY,
+                                imageW,
+                                imageH,
+                                finalMinPolylineLength);
                         allTacsPolylines.addAll(polylines);
 
                         logger.info("Created {} TACS polylines for annotation '{}'", polylines.size(), annotationName);
@@ -851,7 +900,23 @@ public class PPMPerpendicularityWorkflow {
                         "Python error: " + result.get("error").getAsString());
             }
 
-            return new AnnotationResult(result, expandedX, expandedY);
+            // Extract foreground mask NDArray if returned by Python
+            byte[] maskBytes = null;
+            NDArray maskNDArray = null;
+            try {
+                if (task.outputs.containsKey("foreground_mask")) {
+                    maskNDArray = (NDArray) task.outputs.get("foreground_mask");
+                    maskBytes = new byte[expandedW * expandedH];
+                    maskNDArray.buffer().get(maskBytes);
+                    logger.info("Received foreground mask: {}x{}", expandedW, expandedH);
+                }
+            } catch (Exception e) {
+                logger.warn("Could not read foreground mask from output: {}", e.getMessage());
+            } finally {
+                if (maskNDArray != null) maskNDArray.close();
+            }
+
+            return new AnnotationResult(result, expandedX, expandedY, expandedW, expandedH, maskBytes);
 
         } finally {
             if (sumNDArray != null) sumNDArray.close();
@@ -913,10 +978,11 @@ public class PPMPerpendicularityWorkflow {
      * @param offsetY Y offset of cropped region in full image
      * @param imageW full image width (for border filtering)
      * @param imageH full image height (for border filtering)
+     * @param minSegmentLength minimum number of points for a polyline segment (shorter segments are discarded)
      * @return list of Polyline PathObjects (may be empty)
      */
     private static List<PathObject> createTACSPolylines(
-            JsonObject result, int offsetX, int offsetY, int imageW, int imageH) {
+            JsonObject result, int offsetX, int offsetY, int imageW, int imageH, int minSegmentLength) {
 
         List<PathObject> polylines = new ArrayList<>();
 
@@ -952,21 +1018,23 @@ public class PPMPerpendicularityWorkflow {
 
             // Skip points on the image border
             if (px < margin || py < margin || px > imageW - margin || py > imageH - margin) {
-                // Flush current segment if non-empty
-                if (!segX.isEmpty()) {
+                // Flush current segment if non-empty and long enough
+                if (segX.size() >= minSegmentLength) {
                     PathObject polyline = buildPolyline(segX, segY, currentClass == 3 ? tacs3Class : tacs2Class);
                     if (polyline != null) polylines.add(polyline);
-                    segX.clear();
-                    segY.clear();
-                    currentClass = -1;
                 }
+                segX.clear();
+                segY.clear();
+                currentClass = -1;
                 continue;
             }
 
             if (tacsClass != currentClass && !segX.isEmpty()) {
-                // Class changed - flush previous segment
-                PathObject polyline = buildPolyline(segX, segY, currentClass == 3 ? tacs3Class : tacs2Class);
-                if (polyline != null) polylines.add(polyline);
+                // Class changed - flush previous segment if long enough
+                if (segX.size() >= minSegmentLength) {
+                    PathObject polyline = buildPolyline(segX, segY, currentClass == 3 ? tacs3Class : tacs2Class);
+                    if (polyline != null) polylines.add(polyline);
+                }
                 segX.clear();
                 segY.clear();
             }
@@ -976,8 +1044,8 @@ public class PPMPerpendicularityWorkflow {
             segY.add(py);
         }
 
-        // Flush final segment
-        if (!segX.isEmpty()) {
+        // Flush final segment if long enough
+        if (segX.size() >= minSegmentLength) {
             PathObject polyline = buildPolyline(segX, segY, currentClass == 3 ? tacs3Class : tacs2Class);
             if (polyline != null) polylines.add(polyline);
         }
@@ -1184,5 +1252,58 @@ public class PPMPerpendicularityWorkflow {
         }
         resultWindow.show();
         resultWindow.toFront();
+    }
+
+    /**
+     * Saves the foreground mask as a B/W PNG in the output directory.
+     */
+    private static void saveForegroundMask(byte[] maskBytes, int width, int height, Path outputDir) {
+        try {
+            BufferedImage maskImage = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_GRAY);
+            maskImage.getRaster().setDataElements(0, 0, width, height, maskBytes);
+            outputDir.toFile().mkdirs();
+            Path maskPath = outputDir.resolve("foreground_mask.png");
+            ImageIO.write(maskImage, "PNG", maskPath.toFile());
+            logger.info("Saved foreground mask to {}", maskPath);
+        } catch (Exception e) {
+            logger.warn("Failed to save foreground mask: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Creates a detection annotation from a foreground mask.
+     * The mask is thresholded (> 0) and a rectangular detection is created
+     * covering the mask region with the "PPM-Foreground" class.
+     */
+    private static PathObject createMaskDetection(byte[] maskBytes, int offsetX, int offsetY, int width, int height) {
+        try {
+            // Create a rectangle ROI covering the mask region
+            ROI rectRoi = ROIs.createRectangleROI(offsetX, offsetY, width, height, ImagePlane.getDefaultPlane());
+            PathClass foregroundClass = PathClass.fromString("PPM-Foreground");
+            PathObject detection = PathObjects.createDetectionObject(rectRoi, foregroundClass);
+
+            // Count foreground pixels for measurement
+            int fgCount = 0;
+            for (byte b : maskBytes) {
+                if ((b & 0xFF) > 0) fgCount++;
+            }
+            int totalPixels = width * height;
+            double fgPercent = totalPixels > 0 ? 100.0 * fgCount / totalPixels : 0;
+
+            detection.getMeasurementList().put("Foreground pixels", fgCount);
+            detection.getMeasurementList().put("Total pixels", totalPixels);
+            detection.getMeasurementList().put("Foreground %", fgPercent);
+
+            logger.info(
+                    "Created foreground detection: {} fg pixels / {} total ({} pct)",
+                    fgCount,
+                    totalPixels,
+                    String.format("%.1f", fgPercent));
+
+            return detection;
+        } catch (Exception e) {
+            logger.warn("Failed to create mask detection: {}", e.getMessage());
+            return null;
+        }
     }
 }

@@ -79,6 +79,10 @@ public class PPMPreferences {
     private static final StringProperty tacsThresholdDeg =
             PathPrefs.createPersistentPreference("PPMTacsThresholdDeg", "30.0");
 
+    // Minimum TACS polyline length in pixels (short segments are noise)
+    private static final StringProperty minPolylineLengthPx =
+            PathPrefs.createPersistentPreference("PPMMinPolylineLengthPx", "20");
+
     // Angle override preferences for per-acquisition customization
     private static final StringProperty overrideEnabled =
             PathPrefs.createPersistentPreference("PPMAngleOverrideEnabled", "false");
@@ -340,6 +344,14 @@ public class PPMPreferences {
 
     public static void setTacsThresholdDeg(double deg) {
         tacsThresholdDeg.set(String.valueOf(deg));
+    }
+
+    public static int getMinPolylineLengthPx() {
+        return Integer.parseInt(minPolylineLengthPx.get());
+    }
+
+    public static void setMinPolylineLengthPx(int px) {
+        minPolylineLengthPx.set(String.valueOf(px));
     }
 
     // =============== Active Calibration ===============

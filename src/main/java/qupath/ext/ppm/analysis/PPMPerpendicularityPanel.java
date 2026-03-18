@@ -102,6 +102,16 @@ public class PPMPerpendicularityPanel extends VBox {
         metaLabel.setStyle("-fx-text-fill: #666666;");
         annotationBox.getChildren().add(metaLabel);
 
+        // Mask diagnostics (pixel filtering feedback)
+        JsonObject diag = result.has("mask_diagnostics")
+                        && !result.get("mask_diagnostics").isJsonNull()
+                ? result.getAsJsonObject("mask_diagnostics")
+                : null;
+        if (diag != null) {
+            annotationBox.getChildren().add(new Separator());
+            annotationBox.getChildren().add(createMaskDiagnostics(diag));
+        }
+
         // Simple results
         JsonObject simple =
                 result.has("simple") && !result.get("simple").isJsonNull() ? result.getAsJsonObject("simple") : null;
@@ -121,6 +131,48 @@ public class PPMPerpendicularityPanel extends VBox {
         }
 
         contentBox.getChildren().add(annotationBox);
+    }
+
+    private VBox createMaskDiagnostics(JsonObject diag) {
+        VBox box = new VBox(2);
+
+        Label title = new Label("Pixel Filtering");
+        title.setFont(Font.font("System", FontWeight.BOLD, 11));
+        box.getChildren().add(title);
+
+        int total = getInt(diag, "total_pixels", 0);
+        int hsvValid = getInt(diag, "hsv_valid_pixels", 0);
+        int birefValid = getInt(diag, "biref_valid_pixels", -1);
+        int combined = getInt(diag, "combined_valid_pixels", 0);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("Total pixels:     %,d%n", total));
+        sb.append(String.format(
+                "HSV valid:        %,d (%s)%n",
+                hsvValid, total > 0 ? String.format("%.1f%%", 100.0 * hsvValid / total) : "N/A"));
+        if (birefValid >= 0) {
+            sb.append(String.format(
+                    "Biref valid:      %,d (%s)%n",
+                    birefValid, total > 0 ? String.format("%.1f%%", 100.0 * birefValid / total) : "N/A"));
+        }
+        sb.append(String.format(
+                "Combined valid:   %,d (%s)",
+                combined, total > 0 ? String.format("%.1f%%", 100.0 * combined / total) : "N/A"));
+
+        Label statsLabel = new Label(sb.toString());
+        statsLabel.setFont(Font.font("Monospaced", 11));
+        box.getChildren().add(statsLabel);
+
+        // Warning if very few pixels survived filtering
+        if (total > 0 && combined < total * 0.01) {
+            Label warning = new Label("Warning: Less than 1% of pixels passed filtering. "
+                    + "Consider adjusting HSV or birefringence thresholds.");
+            warning.setWrapText(true);
+            warning.setStyle("-fx-text-fill: #CC6600; -fx-font-weight: bold; -fx-font-size: 10px;");
+            box.getChildren().add(warning);
+        }
+
+        return box;
     }
 
     private VBox createSimpleResults(JsonObject simple) {

@@ -31,6 +31,7 @@ import tempfile
 import os
 
 import numpy as np
+from appose import NDArray as PyNDArray
 
 logger = logging.getLogger("ppm.appose.perpendicularity")
 
@@ -38,6 +39,10 @@ try:
     from ppm_library.analysis.surface_analysis import (
         analyze_perpendicularity,
         rasterize_geojson_to_mask,
+    )
+    from ppm_library.analysis.region_analysis import (
+        compute_angles_from_rgb,
+        compute_ppm_positive_mask,
     )
     from ppm_library.calibration.radial import RadialCalibrationResult
 
@@ -90,6 +95,55 @@ try:
         saturation_threshold=saturation_threshold,
         value_threshold=value_threshold,
         foreground_mask=fg_mask,
+    )
+
+    # Compute diagnostic mask statistics so the user can understand
+    # how thresholds are affecting the analysis
+    total_pixels = sum_arr.shape[0] * sum_arr.shape[1]
+
+    # HSV-valid mask (same computation as inside analyze_perpendicularity)
+    hsv_result = compute_angles_from_rgb(
+        sum_arr, calibration,
+        saturation_threshold=saturation_threshold,
+        value_threshold=value_threshold,
+    )
+    hsv_valid_count = int(np.count_nonzero(hsv_result['valid_mask']))
+
+    biref_valid_count = -1  # sentinel: not applicable
+    if biref_arr is not None:
+        biref_mask = compute_ppm_positive_mask(biref_arr, biref_thresh)
+        biref_valid_count = int(np.count_nonzero(biref_mask))
+        combined_mask = hsv_result['valid_mask'] & biref_mask
+    elif fg_mask is not None:
+        combined_mask = hsv_result['valid_mask'] & fg_mask.astype(bool)
+    else:
+        combined_mask = hsv_result['valid_mask']
+
+    combined_valid_count = int(np.count_nonzero(combined_mask))
+
+    # Rasterize boundary to compute zone stats
+    zone_valid_count = combined_valid_count  # approximation before zone mask
+
+    # Add diagnostics to result
+    result['mask_diagnostics'] = {
+        'total_pixels': total_pixels,
+        'hsv_valid_pixels': hsv_valid_count,
+        'biref_valid_pixels': biref_valid_count,
+        'combined_valid_pixels': combined_valid_count,
+    }
+
+    # Return the combined foreground mask as an NDArray for visualization
+    mask_uint8 = (combined_mask.astype(np.uint8) * 255)
+    h_mask, w_mask = mask_uint8.shape
+    mask_nd = PyNDArray(dtype="uint8", shape=[h_mask, w_mask])
+    np.copyto(mask_nd.ndarray(), mask_uint8)
+    task.outputs['foreground_mask'] = mask_nd
+
+    logger.info(
+        "Mask stats: total=%d, hsv_valid=%d, biref_valid=%s, combined=%d",
+        total_pixels, hsv_valid_count,
+        biref_valid_count if biref_valid_count >= 0 else "N/A",
+        combined_valid_count,
     )
 
     # Convert result to JSON-serializable format

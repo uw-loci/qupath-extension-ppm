@@ -342,7 +342,7 @@ public class PPMPolarityPlotWorkflow {
             }
             javafx.scene.layout.VBox.setVgrow(plotPanel, javafx.scene.layout.Priority.ALWAYS);
             wrapper.getChildren().add(plotPanel);
-            Scene scene = new Scene(wrapper, 400, 400);
+            Scene scene = new Scene(wrapper, 420, 480);
             plotWindow = new Stage();
             plotWindow.setTitle("PPM Polarity Plot");
             plotWindow.setScene(scene);

@@ -50,7 +50,7 @@ public class PolarHistogramPanel extends VBox {
         canvas = new Canvas(CANVAS_SIZE, CANVAS_SIZE / 2 + MARGIN + 20);
 
         statsLabel = new Label();
-        statsLabel.setFont(Font.font("Monospaced", 12));
+        statsLabel.setFont(Font.font("Monospaced", 13));
         statsLabel.setWrapText(true);
 
         getChildren().addAll(titleLabel, canvas, statsLabel);
@@ -162,10 +162,10 @@ public class PolarHistogramPanel extends VBox {
 
         // Draw angle labels
         gc.setFill(Color.BLACK);
-        gc.setFont(Font.font("System", 10));
-        gc.fillText("0", centerX + radius + 4, centerY + 4);
-        gc.fillText("90", centerX - 4, centerY - radius - 4);
-        gc.fillText("180", centerX - radius - 24, centerY + 4);
+        gc.setFont(Font.font("System", FontWeight.BOLD, 12));
+        gc.fillText("0", centerX + radius + 6, centerY + 14);
+        gc.fillText("90", centerX - 6, centerY - radius - 6);
+        gc.fillText("180", centerX - radius - 28, centerY + 14);
 
         // Draw tick marks at 30-degree intervals
         gc.setStroke(Color.LIGHTGRAY);
@@ -192,7 +192,7 @@ public class PolarHistogramPanel extends VBox {
 
             // Mean angle label
             gc.setFill(Color.RED);
-            gc.setFont(Font.font("System", FontWeight.BOLD, 10));
+            gc.setFont(Font.font("System", FontWeight.BOLD, 12));
             double labelX = centerX + (radius * 0.95) * Math.cos(meanRad);
             double labelY = centerY - (radius * 0.95) * Math.sin(meanRad);
             gc.fillText(String.format("%.1f", circularMean), labelX, labelY);
