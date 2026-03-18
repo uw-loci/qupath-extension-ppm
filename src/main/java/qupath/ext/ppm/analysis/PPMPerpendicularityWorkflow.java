@@ -25,9 +25,12 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
+import javafx.util.Duration;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
@@ -302,6 +305,53 @@ public class PPMPerpendicularityWorkflow {
         grid.add(fillHolesBox, 0, row, 2, 1);
         row++;
 
+        // --- Pixel filtering section ---
+        Label filterHeader = new Label("Pixel Filtering");
+        filterHeader.setStyle("-fx-font-weight: bold; -fx-padding: 8 0 2 0;");
+        grid.add(filterHeader, 0, row, 3, 1);
+        row++;
+
+        // Birefringence threshold
+        grid.add(new Label("Birefringence threshold:"), 0, row);
+        Spinner<Double> birefSpinner =
+                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 1000, getBirefThreshold(), 10));
+        birefSpinner.setEditable(true);
+        Tooltip birefTip = new Tooltip(
+                "Minimum birefringence image intensity for a pixel to be\n"
+                        + "considered PPM-positive (collagen). Pixels below this\n"
+                        + "value are excluded from analysis. Only applies when a\n"
+                        + "birefringence sibling image is found.");
+        birefTip.setShowDelay(Duration.millis(400));
+        birefSpinner.setTooltip(birefTip);
+        grid.add(birefSpinner, 1, row);
+        row++;
+
+        // Saturation threshold
+        grid.add(new Label("HSV saturation threshold:"), 0, row);
+        Spinner<Double> satSpinner =
+                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 1, PPMPreferences.getSaturationThreshold(), 0.05));
+        satSpinner.setEditable(true);
+        Tooltip satTip = new Tooltip(
+                "Minimum HSV saturation (0-1) for a pixel to have a\n"
+                        + "meaningful hue/orientation. Filters out grayscale pixels.");
+        satTip.setShowDelay(Duration.millis(400));
+        satSpinner.setTooltip(satTip);
+        grid.add(satSpinner, 1, row);
+        row++;
+
+        // Value threshold
+        grid.add(new Label("HSV value threshold:"), 0, row);
+        Spinner<Double> valSpinner =
+                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 1, PPMPreferences.getValueThreshold(), 0.05));
+        valSpinner.setEditable(true);
+        Tooltip valTip = new Tooltip(
+                "Minimum HSV brightness (0-1) for a pixel to be included.\n"
+                        + "Filters out dark/shadow pixels.");
+        valTip.setShowDelay(Duration.millis(400));
+        valSpinner.setTooltip(valTip);
+        grid.add(valSpinner, 1, row);
+        row++;
+
         // Pixel size display
         grid.add(new Label("Pixel size:"), 0, row);
         grid.add(new Label(String.format("%.4f um/px", pixelSizeUm)), 1, row);
@@ -342,6 +392,9 @@ public class PPMPerpendicularityWorkflow {
             String zoneMode = zoneChoice.getValue();
             double tacsThreshold = tacsSpinner.getValue();
             boolean fillHoles = fillHolesBox.isSelected();
+            double birefThreshold = birefSpinner.getValue();
+            double satThreshold = satSpinner.getValue();
+            double valThreshold = valSpinner.getValue();
 
             // Collect matching annotations
             List<PathObject> matchingAnnotations = allAnnotations.stream()
@@ -414,6 +467,9 @@ public class PPMPerpendicularityWorkflow {
                                 zoneMode,
                                 tacsThreshold,
                                 fillHoles,
+                                birefThreshold,
+                                satThreshold,
+                                valThreshold,
                                 annotationOutputDir);
 
                         // Save JSON result
@@ -477,8 +533,13 @@ public class PPMPerpendicularityWorkflow {
             helpBar.setPadding(new Insets(5, 10, 0, 10));
             dialogRoot.getChildren().add(0, helpBar);
         }
-        dialog.setScene(new Scene(dialogRoot));
-        dialog.sizeToScene();
+
+        ScrollPane scrollPane = new ScrollPane(dialogRoot);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setStyle("-fx-background-color: transparent;");
+
+        dialog.setScene(new Scene(scrollPane, 550, 580));
+        dialog.setResizable(true);
         dialog.show();
     }
 
@@ -492,6 +553,9 @@ public class PPMPerpendicularityWorkflow {
             String zoneMode,
             double tacsThreshold,
             boolean fillHoles,
+            double birefThreshold,
+            double saturationThreshold,
+            double valueThreshold,
             Path outputDir)
             throws Exception {
 
@@ -564,6 +628,9 @@ public class PPMPerpendicularityWorkflow {
                     zoneMode,
                     tacsThreshold,
                     fillHoles,
+                    birefThreshold,
+                    saturationThreshold,
+                    valueThreshold,
                     outputDir);
 
             return new AnnotationResult(result, expandedX, expandedY);
@@ -750,6 +817,9 @@ public class PPMPerpendicularityWorkflow {
             String zoneMode,
             double tacsThreshold,
             boolean fillHoles,
+            double birefThreshold,
+            double saturationThreshold,
+            double valueThreshold,
             Path outputDir)
             throws Exception {
 
@@ -773,6 +843,10 @@ public class PPMPerpendicularityWorkflow {
         command.add(zoneMode);
         command.add("--tacs-threshold");
         command.add(String.valueOf(tacsThreshold));
+        command.add("--saturation-threshold");
+        command.add(String.valueOf(saturationThreshold));
+        command.add("--value-threshold");
+        command.add(String.valueOf(valueThreshold));
 
         if (!fillHoles) {
             command.add("--no-fill-holes");
@@ -782,7 +856,7 @@ public class PPMPerpendicularityWorkflow {
             command.add("--biref");
             command.add(birefPath.toString());
             command.add("--biref-threshold");
-            command.add(String.valueOf(getBirefThreshold()));
+            command.add(String.valueOf(birefThreshold));
         }
 
         if (outputDir != null) {

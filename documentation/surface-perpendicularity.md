@@ -14,10 +14,10 @@ Perpendicularity analysis reveals how collagen fibers are organized relative to 
 
 ## Prerequisites
 
-1. **Active PPM calibration** -- A sunburst calibration must be set (see [PPM Reference Slide](ppm-reference-slide.md))
-2. **PPM image open** -- A PPM birefringence or sum image
-3. **Boundary annotation** -- An annotation defining the tissue boundary (e.g., tumor border drawn in QuPath)
-4. **Region annotation** -- An annotation defining the analysis region (typically surrounding the boundary)
+1. **Completed [Sunburst Calibration](ppm-reference-slide.md)** -- The hue-to-angle calibration (.npz) must exist. This is created from a PPM reference slide and is required for all PPM analysis.
+2. **Low-angle PPM image open** -- Open a PPM **birefringence** or **sum** image in QuPath. These are the post-processed images from a PPM acquisition (not the raw angle images). Ensure the image was acquired with low-angle (crossed or near-crossed) polarizer settings for good color contrast.
+3. **Boundary annotations drawn** -- Draw annotations in QuPath that define the tissue boundary of interest (e.g., tumor-stroma interface). Annotations must have a **PathClass assigned** (e.g., "Tumor", "Boundary") so the tool can identify them.
+4. **Camera settings were appropriate** -- The source PPM image must not have saturated pixels, as overexposure corrupts hue values and produces incorrect fiber angle measurements. If in doubt, re-acquire with lower exposure.
 
 ## How It Works
 

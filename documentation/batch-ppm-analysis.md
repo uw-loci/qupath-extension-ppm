@@ -10,9 +10,9 @@ Runs PPM analysis across all (or selected) annotations in the current QuPath pro
 
 ## Prerequisites
 
-1. **Active PPM calibration** -- A sunburst calibration must be set (see [PPM Reference Slide](ppm-reference-slide.md))
-2. **QuPath project open** -- With PPM images and annotations
-3. **Annotations drawn** -- Regions of interest must be annotated in the PPM images
+1. **Completed [Sunburst Calibration](ppm-reference-slide.md)** -- The hue-to-angle calibration (.npz) must exist. All PPM analysis depends on this calibration.
+2. **QuPath project open** -- With PPM birefringence/sum images (acquired with low-angle polarizer settings, no pixel saturation)
+3. **Annotations drawn** -- Regions of interest must be annotated with **PathClasses assigned**. For perpendicularity analysis, boundary annotations (e.g., tumor-stroma interface) are required.
 
 ## How It Works
 

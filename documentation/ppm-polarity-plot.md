@@ -10,9 +10,9 @@ Computes and displays a polarity rose diagram (polar histogram) for the selected
 
 ## Prerequisites
 
-1. **Active PPM calibration** -- A sunburst calibration must be set (see [PPM Reference Slide](ppm-reference-slide.md))
-2. **PPM image open** -- A PPM birefringence or sum image must be the current image
-3. **Annotation selected** -- Select an annotation in QuPath to define the region of interest
+1. **Completed [Sunburst Calibration](ppm-reference-slide.md)** -- The hue-to-angle calibration (.npz) must exist. This maps HSV hue values to fiber orientation angles.
+2. **PPM birefringence or sum image open** -- Open a post-processed PPM image (not a raw angle image). The image must not have saturated pixels, as overexposure corrupts hue values and produces incorrect angle measurements.
+3. **Annotation selected** -- Select an annotation in QuPath to define the region of interest for the polarity analysis.
 
 ## How It Works
 

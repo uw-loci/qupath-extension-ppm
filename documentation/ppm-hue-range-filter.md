@@ -10,8 +10,8 @@ Applies a real-time overlay to the current PPM image that highlights all pixels 
 
 ## Prerequisites
 
-1. **Active PPM calibration** -- A sunburst calibration (.npz) must be set as the active calibration (see [PPM Reference Slide](ppm-reference-slide.md))
-2. **PPM image open** -- A PPM birefringence or sum image must be the current image in QuPath
+1. **Completed [Sunburst Calibration](ppm-reference-slide.md)** -- The hue-to-angle calibration (.npz) must exist. This maps HSV hue values to fiber orientation angles.
+2. **PPM birefringence or sum image open** -- Open a post-processed PPM image in QuPath (not a raw angle image). The image should have been acquired with low-angle (crossed/near-crossed) polarizer settings and without pixel saturation, as overexposed pixels have corrupted hue values.
 
 ## How It Works
 

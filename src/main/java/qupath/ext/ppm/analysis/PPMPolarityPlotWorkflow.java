@@ -243,6 +243,10 @@ public class PPMPolarityPlotWorkflow {
         command.add(calibrationPath);
         command.add("--bins");
         command.add(String.valueOf(getHistogramBins()));
+        command.add("--saturation-threshold");
+        command.add(String.valueOf(PPMPreferences.getSaturationThreshold()));
+        command.add("--value-threshold");
+        command.add(String.valueOf(PPMPreferences.getValueThreshold()));
 
         if (birefPath != null) {
             command.add("--biref");

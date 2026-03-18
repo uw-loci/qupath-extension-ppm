@@ -20,7 +20,9 @@ Creates a hue-to-angle calibration from a PPM reference slide with a sunburst (r
 2. **PPM Reference Slide** -- A slide with a sunburst/fan pattern of known orientations (radial spokes)
 3. **Microscope connection** -- QPSC must be connected
 4. **Proper focus** -- Center the sunburst pattern in the field of view and focus
-5. **Camera settings** -- Use low-angle PPM settings (crossed or near-crossed) for best color saturation
+5. **Camera settings** -- Use low-angle PPM settings (crossed or near-crossed) for best color contrast
+
+> **WARNING: Avoid pixel saturation (overexposure).** Saturated pixels have corrupted hue values -- any channel clipping at 255 will shift the measured hue and produce an incorrect calibration. Before running this workflow, open Camera Control and verify that no channels are clipping. If the image looks washed out or white, **reduce exposure** before proceeding. Check the histogram or per-channel RGB readout in the Live Viewer to confirm no saturation.
 
 ## How It Works
 
@@ -43,7 +45,8 @@ Creates a hue-to-angle calibration from a PPM reference slide with a sunburst (r
 
 Before starting calibration, use the **Open Camera Control...** button to:
 - Set the polarizer to a low angle (crossed or near-crossed)
-- Verify exposure settings produce good color saturation on the reference slide
+- Verify exposure settings produce good color contrast on the reference slide
+- **Check for pixel saturation** -- overexposed (clipped) pixels produce incorrect hue values and will corrupt the calibration. Use the Live Viewer histogram or RGB readout to confirm no channel is saturating
 
 ### Detection Settings
 
@@ -105,6 +108,8 @@ The results dialog provides several recovery options:
 | Low R-squared | Poor spoke detection | Adjust thresholds, check focus, try manual center |
 | Few spokes found | Center misdetected | Use manual center selection |
 | Noisy fit | Background not uniform | Clean slide, improve illumination |
+| Incorrect calibration / wrong angles | Pixel saturation (overexposure) | Reduce exposure until no channel clips at 255. Check histogram in Live Viewer |
+| Spokes all appear same hue | Camera saturated | Significantly reduce exposure; saturated pixels lose hue information |
 
 ## Related Workflows
 

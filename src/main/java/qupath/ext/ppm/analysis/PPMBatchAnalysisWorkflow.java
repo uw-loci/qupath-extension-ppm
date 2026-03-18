@@ -629,6 +629,10 @@ public class PPMBatchAnalysisWorkflow {
             command.add(String.valueOf(getHistogramBins()));
             command.add("--roi-mask");
             command.add(roiMaskPath.toString());
+            command.add("--saturation-threshold");
+            command.add(String.valueOf(PPMPreferences.getSaturationThreshold()));
+            command.add("--value-threshold");
+            command.add(String.valueOf(PPMPreferences.getValueThreshold()));
 
             if (birefPath != null) {
                 command.add("--biref");
@@ -703,6 +707,10 @@ public class PPMBatchAnalysisWorkflow {
             command.add(zoneMode);
             command.add("--tacs-threshold");
             command.add(String.valueOf(tacsThreshold));
+            command.add("--saturation-threshold");
+            command.add(String.valueOf(PPMPreferences.getSaturationThreshold()));
+            command.add("--value-threshold");
+            command.add(String.valueOf(PPMPreferences.getValueThreshold()));
 
             if (!fillHoles) {
                 command.add("--no-fill-holes");
