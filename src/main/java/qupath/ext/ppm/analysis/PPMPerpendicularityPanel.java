@@ -292,10 +292,11 @@ public class PPMPerpendicularityPanel extends VBox {
         gc.setFill(Color.rgb(0, 255, 65, 0.8));
         gc.fillRect(x + w1 + w2, barY, w3, BAR_HEIGHT);
 
-        // Labels inside bars
-        gc.setFill(Color.WHITE);
+        // Labels inside bars (black on bright backgrounds for readability)
         gc.setFont(Font.font("System", FontWeight.BOLD, 10));
+        gc.setFill(Color.WHITE);
         if (w1 > 50) gc.fillText(String.format("%.0f%% ||", pctParallel), x + 4, barY + 18);
+        gc.setFill(Color.BLACK);
         if (w2 > 50) gc.fillText(String.format("%.0f%% /", pctOblique), x + w1 + 4, barY + 18);
         if (w3 > 50) gc.fillText(String.format("%.0f%% +", pctPerp), x + w1 + w2 + 4, barY + 18);
 
@@ -405,9 +406,10 @@ public class PPMPerpendicularityPanel extends VBox {
         gc.setFill(Color.rgb(0, 255, 65, 0.8));
         gc.fillRect(x + w2, barY, w3, BAR_HEIGHT);
 
-        gc.setFill(Color.WHITE);
         gc.setFont(Font.font("System", FontWeight.BOLD, 11));
+        gc.setFill(Color.WHITE);
         if (w2 > 60) gc.fillText(String.format("TACS-2: %.1f%%", pctTacs2), x + 4, barY + 20);
+        gc.setFill(Color.BLACK);
         if (w3 > 60) gc.fillText(String.format("TACS-3: %.1f%%", pctTacs3), x + w2 + 4, barY + 20);
     }
 

@@ -1373,7 +1373,8 @@ public class PPMPerpendicularityWorkflow {
             }
 
             ROI maskRoi = GeometryTools.geometryToROI(geometry, ImagePlane.getDefaultPlane());
-            PathClass foregroundClass = PathClass.fromString("PPM-Foreground");
+            PathClass foregroundClass = PathClass.fromString("PPM-Foreground", ColorTools.packRGB(0, 255, 255));
+            foregroundClass.setColor(ColorTools.packRGB(0, 255, 255));
             PathObject detection = PathObjects.createDetectionObject(maskRoi, foregroundClass);
 
             // Count foreground pixels for measurement
