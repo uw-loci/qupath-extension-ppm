@@ -20,6 +20,10 @@ Optional:
     biref_threshold:        float
     foreground_mask:        NDArray (H, W) uint8
     output_dir:             str - directory for saving intermediate results
+    boundary_smoothing_sigma: float - Gaussian sigma for boundary smoothing (default 5.0)
+    smoothing_window:       int - TACS contour score smoothing window (default 10)
+    min_collagen_area:      int - min connected component area in pixels (default 100)
+    mask_smoothing_sigma:   float - Gaussian sigma for mask cleanup (default 2.0)
 
 Output:
     task.outputs['result_json'] = JSON string (same format as CLI output)
@@ -70,6 +74,26 @@ try:
     except NameError:
         out_dir = None
 
+    try:
+        bnd_sigma = float(boundary_smoothing_sigma)
+    except NameError:
+        bnd_sigma = 5.0
+
+    try:
+        smooth_win = int(smoothing_window)
+    except NameError:
+        smooth_win = 10
+
+    try:
+        min_area = int(min_collagen_area)
+    except NameError:
+        min_area = 100
+
+    try:
+        mask_sigma = float(mask_smoothing_sigma)
+    except NameError:
+        mask_sigma = 2.0
+
     # Load calibration from file
     calibration = RadialCalibrationResult.load(calibration_path)
 
@@ -90,6 +114,8 @@ try:
         mode=zone_mode,
         fill_holes=fill_holes,
         tacs_threshold_deg=tacs_threshold,
+        smoothing_window=smooth_win,
+        boundary_smoothing_sigma=bnd_sigma,
         biref_array=biref_arr,
         biref_threshold=biref_thresh,
         saturation_threshold=saturation_threshold,
@@ -144,12 +170,13 @@ try:
     analysis_valid_count = int(np.count_nonzero(analysis_mask))
 
     # Gaussian smooth + re-threshold to clean up noisy fragments
-    smoothed = ndi.gaussian_filter(analysis_mask.astype(np.float32), sigma=2.0)
-    analysis_mask = smoothed > 0.3
+    if mask_sigma > 0:
+        smoothed = ndi.gaussian_filter(analysis_mask.astype(np.float32), sigma=mask_sigma)
+        analysis_mask = smoothed > 0.3
 
     # Remove small connected components (area threshold)
-    min_object_area = 100  # pixels
-    analysis_mask = remove_small_objects(analysis_mask, min_size=min_object_area)
+    if min_area > 0:
+        analysis_mask = remove_small_objects(analysis_mask, min_size=min_area)
 
     final_valid_count = int(np.count_nonzero(analysis_mask))
 

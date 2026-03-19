@@ -422,6 +422,66 @@ public class PPMPerpendicularityWorkflow {
         grid.add(minLengthSpinner, 1, row);
         row++;
 
+        // --- Smoothing & cleanup section ---
+        Label smoothHeader = new Label("Smoothing & Cleanup");
+        smoothHeader.setStyle("-fx-font-weight: bold; -fx-padding: 8 0 2 0;");
+        grid.add(smoothHeader, 0, row, 3, 1);
+        row++;
+
+        grid.add(new Label("Boundary smoothing (px):"), 0, row);
+        Spinner<Double> boundarySigmaSpinner =
+                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 20, 5.0, 0.5));
+        boundarySigmaSpinner.setEditable(true);
+        Tooltip bndSigmaTip = new Tooltip("Range: 0-20 pixels. Gaussian sigma for smoothing the\n"
+                + "boundary contour before computing surface normals.\n"
+                + "Removes pixel-level staircase artifacts.\n\n"
+                + "Decrease for finer boundary detail. Set 0 to disable.\n"
+                + "Default 5.0 works for smooth tumor boundaries.");
+        bndSigmaTip.setShowDelay(Duration.millis(400));
+        boundarySigmaSpinner.setTooltip(bndSigmaTip);
+        grid.add(boundarySigmaSpinner, 1, row);
+        row++;
+
+        grid.add(new Label("TACS contour smoothing:"), 0, row);
+        Spinner<Integer> smoothWindowSpinner =
+                new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 50, 10, 1));
+        smoothWindowSpinner.setEditable(true);
+        Tooltip smoothWinTip = new Tooltip("Range: 1-50. Moving average window for TACS contour\n"
+                + "score smoothing. Larger values smooth out noisy\n"
+                + "TACS-2/3 classification along the boundary.\n\n"
+                + "Decrease for finer classification detail.\n"
+                + "Set 1 to disable smoothing. Default 10.");
+        smoothWinTip.setShowDelay(Duration.millis(400));
+        smoothWindowSpinner.setTooltip(smoothWinTip);
+        grid.add(smoothWindowSpinner, 1, row);
+        row++;
+
+        grid.add(new Label("Min collagen area (px):"), 0, row);
+        Spinner<Integer> minAreaSpinner =
+                new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 5000, 100, 25));
+        minAreaSpinner.setEditable(true);
+        Tooltip minAreaTip = new Tooltip("Range: 0-5000 pixels. Connected components smaller than\n"
+                + "this are removed from the foreground mask.\n\n"
+                + "Decrease to keep thin collagen strands and small\n"
+                + "fragments. Set 0 to disable cleanup. Default 100.");
+        minAreaTip.setShowDelay(Duration.millis(400));
+        minAreaSpinner.setTooltip(minAreaTip);
+        grid.add(minAreaSpinner, 1, row);
+        row++;
+
+        grid.add(new Label("Mask smoothing sigma:"), 0, row);
+        Spinner<Double> maskSigmaSpinner =
+                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 10, 2.0, 0.5));
+        maskSigmaSpinner.setEditable(true);
+        Tooltip maskSigmaTip = new Tooltip("Range: 0-10 pixels. Gaussian sigma for smoothing the\n"
+                + "foreground mask before removing small objects.\n\n"
+                + "Decrease to preserve thin collagen features.\n"
+                + "Set 0 to disable smoothing. Default 2.0.");
+        maskSigmaTip.setShowDelay(Duration.millis(400));
+        maskSigmaSpinner.setTooltip(maskSigmaTip);
+        grid.add(maskSigmaSpinner, 1, row);
+        row++;
+
         // --- Foreground detection section ---
         Label filterHeader = new Label("Foreground Detection");
         filterHeader.setStyle("-fx-font-weight: bold; -fx-padding: 8 0 2 0;");
@@ -578,6 +638,10 @@ public class PPMPerpendicularityWorkflow {
             boolean useClassifier = classifierRadio.isSelected();
             String selectedClassifier = classifierChoice.getValue();
             int minPolylineLength = minLengthSpinner.getValue();
+            double boundarySigma = boundarySigmaSpinner.getValue();
+            int smoothWindow = smoothWindowSpinner.getValue();
+            int minCollagenArea = minAreaSpinner.getValue();
+            double maskSigma = maskSigmaSpinner.getValue();
 
             // Persist user-modified values for next session
             PPMPreferences.setDilationUm(dilationUm);
@@ -690,6 +754,10 @@ public class PPMPerpendicularityWorkflow {
                                 satThreshold,
                                 valThreshold,
                                 finalClassifier,
+                                boundarySigma,
+                                smoothWindow,
+                                minCollagenArea,
+                                maskSigma,
                                 annotationOutputDir);
 
                         // Save JSON result
@@ -818,6 +886,10 @@ public class PPMPerpendicularityWorkflow {
             double saturationThreshold,
             double valueThreshold,
             PixelClassifier classifier,
+            double boundarySmoothingSigma,
+            int smoothingWindow,
+            int minCollagenArea,
+            double maskSmoothingSigma,
             Path outputDir)
             throws Exception {
 
@@ -895,6 +967,10 @@ public class PPMPerpendicularityWorkflow {
             inputs.put("value_threshold", valueThreshold);
             inputs.put("image_width", expandedW);
             inputs.put("image_height", expandedH);
+            inputs.put("boundary_smoothing_sigma", boundarySmoothingSigma);
+            inputs.put("smoothing_window", smoothingWindow);
+            inputs.put("min_collagen_area", minCollagenArea);
+            inputs.put("mask_smoothing_sigma", maskSmoothingSigma);
 
             if (birefNDArray != null) {
                 inputs.put("biref_image", birefNDArray);
