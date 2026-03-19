@@ -719,6 +719,23 @@ public class PPMPerpendicularityWorkflow {
                     // Ensure Appose PPM environment is initialized
                     ensureEnvironmentReady();
 
+                    // Remove previous perpendicularity results to avoid stacking
+                    List<PathObject> previousResults = new ArrayList<>();
+                    for (PathObject obj : hierarchy.getAllObjects(false)) {
+                        PathClass pc = obj.getPathClass();
+                        if (pc != null) {
+                            String name = pc.toString();
+                            if ("TACS-2".equals(name) || "TACS-3".equals(name)
+                                    || "PPM-Foreground".equals(name)) {
+                                previousResults.add(obj);
+                            }
+                        }
+                    }
+                    if (!previousResults.isEmpty()) {
+                        hierarchy.removeObjects(previousResults, true);
+                        logger.info("Removed {} previous perpendicularity result objects", previousResults.size());
+                    }
+
                     List<PathObject> allTacsPolylines = new ArrayList<>();
 
                     for (int i = 0; i < matchingAnnotations.size(); i++) {
@@ -782,6 +799,8 @@ public class PPMPerpendicularityWorkflow {
                                     annResult.regionW,
                                     annResult.regionH);
                             if (maskDetection != null) {
+                                maskDetection.getMeasurementList().put("Perp. parent", annotationIndex);
+                                maskDetection.setName("Foreground: " + annotationName);
                                 allTacsPolylines.add(maskDetection);
                             }
                         }
@@ -794,6 +813,9 @@ public class PPMPerpendicularityWorkflow {
                                 imageW,
                                 imageH,
                                 finalMinPolylineLength);
+                        for (PathObject polyline : polylines) {
+                            polyline.getMeasurementList().put("Perp. parent", annotationIndex);
+                        }
                         allTacsPolylines.addAll(polylines);
 
                         logger.info("Created {} TACS polylines for annotation '{}'", polylines.size(), annotationName);
