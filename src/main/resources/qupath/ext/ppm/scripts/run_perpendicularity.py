@@ -129,52 +129,17 @@ try:
         min_rgb_intensity=min_intensity,
     )
 
-    # Compute diagnostic mask statistics so the user can understand
-    # how thresholds are affecting the analysis
+    # Use diagnostic counts and intermediate masks returned by
+    # analyze_perpendicularity (avoids recomputing angles, masks, zones)
     from scipy import ndimage as ndi
-    from ppm_library.analysis.surface_analysis import compute_border_zone_mask
     from skimage.morphology import remove_small_objects
 
-    total_pixels = sum_arr.shape[0] * sum_arr.shape[1]
+    diag = result.pop('mask_diagnostics')
+    fiber_mask = result.pop('fiber_mask')
+    zone_mask = result.pop('zone_mask')
 
-    # HSV-valid mask (same computation as inside analyze_perpendicularity)
-    hsv_result = compute_angles_from_rgb(
-        sum_arr, calibration,
-        saturation_threshold=saturation_threshold,
-        value_threshold=value_threshold,
-        exclude_clipped=True,
-        min_rgb_intensity=min_intensity,
-    )
-    hsv_valid_count = int(np.count_nonzero(hsv_result['valid_mask']))
-    clipped_count = hsv_result.get('n_clipped', 0)
-    dark_count = hsv_result.get('n_dark_excluded', 0)
-
-    biref_valid_count = -1  # sentinel: not applicable
-    if biref_arr is not None:
-        biref_mask = compute_ppm_positive_mask(biref_arr, biref_thresh)
-        biref_valid_count = int(np.count_nonzero(biref_mask))
-        combined_mask = hsv_result['valid_mask'] & biref_mask
-    elif fg_mask is not None:
-        combined_mask = hsv_result['valid_mask'] & fg_mask.astype(bool)
-    else:
-        combined_mask = hsv_result['valid_mask']
-
-    combined_valid_count = int(np.count_nonzero(combined_mask))
-
-    # Compute the zone mask (same as analyze_perpendicularity does internally)
-    # so the returned mask shows ONLY what was actually analyzed
-    mask_for_zone = boundary_mask.copy()
-    if fill_holes:
-        mask_for_zone = ndi.binary_fill_holes(mask_for_zone)
-
-    dilation_px_int = max(1, int(round(dilation_um / pixel_size_um)))
-    zone_result = compute_border_zone_mask(
-        mask_for_zone, dilation_px_int, mode=zone_mode, fill_holes=False
-    )
-    zone_mask = zone_result['zone_mask']
-
-    # Intersect foreground with zone -> only pixels that were actually analyzed
-    analysis_mask = combined_mask & zone_mask
+    # Build analysis mask from the returned intermediate masks
+    analysis_mask = fiber_mask & zone_mask
     analysis_valid_count = int(np.count_nonzero(analysis_mask))
 
     # Gaussian smooth + re-threshold to clean up noisy fragments
@@ -188,21 +153,10 @@ try:
 
     final_valid_count = int(np.count_nonzero(analysis_mask))
 
-    # Get clipping count from the main result too
-    result_clipped = result.get('n_clipped_pixels', 0)
-
-    # Add diagnostics to result
-    result['mask_diagnostics'] = {
-        'total_pixels': total_pixels,
-        'hsv_valid_pixels': hsv_valid_count,
-        'clipped_pixels': clipped_count if clipped_count > 0 else result_clipped,
-        'dark_excluded_pixels': dark_count,
-        'biref_valid_pixels': biref_valid_count,
-        'combined_valid_pixels': combined_valid_count,
-        'zone_pixels': int(np.count_nonzero(zone_mask)),
-        'analysis_valid_pixels': analysis_valid_count,
-        'final_pixels_after_cleanup': final_valid_count,
-    }
+    # Add visualization-specific counts to the diagnostics from analysis
+    diag['analysis_valid_pixels'] = analysis_valid_count
+    diag['final_pixels_after_cleanup'] = final_valid_count
+    result['mask_diagnostics'] = diag
 
     # Return the analysis mask as an NDArray for visualization
     mask_uint8 = (analysis_mask.astype(np.uint8) * 255)
@@ -214,10 +168,10 @@ try:
     logger.info(
         "Mask stats: total=%d, hsv=%d, biref=%s, combined=%d, "
         "zone=%d, analysis=%d, final=%d",
-        total_pixels, hsv_valid_count,
-        biref_valid_count if biref_valid_count >= 0 else "N/A",
-        combined_valid_count,
-        int(np.count_nonzero(zone_mask)),
+        diag['total_pixels'], diag['hsv_valid_pixels'],
+        diag['biref_valid_pixels'] if diag['biref_valid_pixels'] >= 0 else "N/A",
+        diag['combined_valid_pixels'],
+        diag['zone_pixels'],
         analysis_valid_count,
         final_valid_count,
     )
