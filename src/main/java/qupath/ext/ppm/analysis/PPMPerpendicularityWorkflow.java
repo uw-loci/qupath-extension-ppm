@@ -30,6 +30,8 @@ import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
+import javafx.scene.image.PixelWriter;
+import javafx.scene.image.WritableImage;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
@@ -733,9 +735,25 @@ public class PPMPerpendicularityWorkflow {
                         final String finalName = annotationName;
                         final int idx = annotationIndex;
                         final int total = totalAnnotations;
+                        final byte[] maskBytesForUI = annResult.foregroundMask;
+                        final int maskUIW = annResult.regionW;
+                        final int maskUIH = annResult.regionH;
                         Platform.runLater(() -> {
                             if (resultPanel != null) {
-                                resultPanel.addResult(finalResult, finalName, idx, total);
+                                WritableImage maskFXImage = null;
+                                if (maskBytesForUI != null) {
+                                    maskFXImage = new WritableImage(maskUIW, maskUIH);
+                                    PixelWriter pw = maskFXImage.getPixelWriter();
+                                    for (int my = 0; my < maskUIH; my++) {
+                                        for (int mx = 0; mx < maskUIW; mx++) {
+                                            int val = maskBytesForUI[my * maskUIW + mx] & 0xFF;
+                                            pw.setArgb(mx, my,
+                                                    0xFF000000 | (val << 16) | (val << 8) | val);
+                                        }
+                                    }
+                                }
+                                resultPanel.addResult(
+                                        finalResult, finalName, idx, total, maskFXImage);
                             }
                         });
                     }
@@ -748,7 +766,7 @@ public class PPMPerpendicularityWorkflow {
 
                     Platform.runLater(() -> {
                         if (resultPanel != null) {
-                            resultPanel.setStatus("Analysis complete. Results saved to: " + outputDir);
+                            resultPanel.setStatus("Analysis complete.\nResults saved to: " + outputDir);
                         }
                         if (resultWindow != null) {
                             resultWindow.show();

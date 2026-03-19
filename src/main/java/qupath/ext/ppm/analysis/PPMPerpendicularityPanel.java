@@ -8,6 +8,8 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
+import javafx.scene.image.ImageView;
+import javafx.scene.image.WritableImage;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -78,7 +80,8 @@ public class PPMPerpendicularityPanel extends VBox {
     /**
      * Adds analysis results for one annotation.
      */
-    public void addResult(JsonObject result, String annotationName, int index, int totalAnnotations) {
+    public void addResult(JsonObject result, String annotationName, int index, int totalAnnotations,
+                          WritableImage maskImage) {
 
         VBox annotationBox = new VBox(6);
         annotationBox.setPadding(new Insets(8));
@@ -128,6 +131,12 @@ public class PPMPerpendicularityPanel extends VBox {
         if (pstacs != null) {
             annotationBox.getChildren().add(new Separator());
             annotationBox.getChildren().add(createTACSResults(pstacs));
+        }
+
+        // Foreground mask image
+        if (maskImage != null) {
+            annotationBox.getChildren().add(new Separator());
+            annotationBox.getChildren().add(createMaskImageSection(maskImage));
         }
 
         contentBox.getChildren().add(annotationBox);
@@ -268,19 +277,19 @@ public class PPMPerpendicularityPanel extends VBox {
         gc.setFont(Font.font("System", 10));
         gc.fillText("Deviation from boundary (0=parallel, 90=perpendicular)", x, 12);
 
-        // Parallel (blue)
+        // Parallel (orange, matches TACS-2 annotation color)
         double w1 = totalWidth * pctParallel / 100.0;
-        gc.setFill(Color.rgb(66, 133, 244, 0.8));
+        gc.setFill(Color.rgb(255, 100, 0, 0.8));
         gc.fillRect(x, barY, w1, BAR_HEIGHT);
 
-        // Oblique (yellow)
+        // Oblique (gray, unclassified in TACS)
         double w2 = totalWidth * pctOblique / 100.0;
-        gc.setFill(Color.rgb(251, 188, 5, 0.8));
+        gc.setFill(Color.rgb(150, 150, 150, 0.8));
         gc.fillRect(x + w1, barY, w2, BAR_HEIGHT);
 
-        // Perpendicular (red)
+        // Perpendicular (green, matches TACS-3 annotation color)
         double w3 = totalWidth * pctPerp / 100.0;
-        gc.setFill(Color.rgb(234, 67, 53, 0.8));
+        gc.setFill(Color.rgb(0, 255, 65, 0.8));
         gc.fillRect(x + w1 + w2, barY, w3, BAR_HEIGHT);
 
         // Labels inside bars
@@ -293,17 +302,17 @@ public class PPMPerpendicularityPanel extends VBox {
         // Legend below
         gc.setFont(Font.font("System", 9));
         double legendY = barY + BAR_HEIGHT + 12;
-        gc.setFill(Color.rgb(66, 133, 244));
+        gc.setFill(Color.rgb(255, 100, 0));
         gc.fillRect(x, legendY - 8, 8, 8);
         gc.setFill(Color.BLACK);
         gc.fillText("0-30 (parallel)", x + 12, legendY);
 
-        gc.setFill(Color.rgb(251, 188, 5));
+        gc.setFill(Color.rgb(150, 150, 150));
         gc.fillRect(x + 110, legendY - 8, 8, 8);
         gc.setFill(Color.BLACK);
         gc.fillText("30-60 (oblique)", x + 124, legendY);
 
-        gc.setFill(Color.rgb(234, 67, 53));
+        gc.setFill(Color.rgb(0, 255, 65));
         gc.fillRect(x + 230, legendY - 8, 8, 8);
         gc.setFill(Color.BLACK);
         gc.fillText("60-90 (perpendicular)", x + 244, legendY);
@@ -348,9 +357,9 @@ public class PPMPerpendicularityPanel extends VBox {
             double barHeight = chartHeight * counts[i] / (double) maxCount;
             double barX = originX + i * barWidth;
 
-            // Color gradient from blue (parallel) to red (perpendicular)
+            // Color gradient from orange (parallel/TACS-2) to green (perpendicular/TACS-3)
             double t = (double) i / (nBins - 1);
-            Color barColor = Color.color(t, 0.3, 1.0 - t, 0.8);
+            Color barColor = Color.color(1.0 - t, 100.0 / 255 + t * 155.0 / 255, t * 65.0 / 255, 0.8);
 
             gc.setFill(barColor);
             gc.fillRect(barX, originY - barHeight, barWidth - 1, barHeight);
@@ -386,20 +395,41 @@ public class PPMPerpendicularityPanel extends VBox {
         double totalWidth = HISTOGRAM_WIDTH - 20;
         double x = 10;
 
-        // TACS-2 (blue = parallel to boundary)
+        // TACS-2 (orange = parallel to boundary, matches annotation color)
         double w2 = totalWidth * pctTacs2 / 100.0;
-        gc.setFill(Color.rgb(66, 133, 244, 0.8));
+        gc.setFill(Color.rgb(255, 100, 0, 0.8));
         gc.fillRect(x, barY, w2, BAR_HEIGHT);
 
-        // TACS-3 (red = perpendicular to boundary)
+        // TACS-3 (green = perpendicular to boundary, matches annotation color)
         double w3 = totalWidth * pctTacs3 / 100.0;
-        gc.setFill(Color.rgb(234, 67, 53, 0.8));
+        gc.setFill(Color.rgb(0, 255, 65, 0.8));
         gc.fillRect(x + w2, barY, w3, BAR_HEIGHT);
 
         gc.setFill(Color.WHITE);
         gc.setFont(Font.font("System", FontWeight.BOLD, 11));
         if (w2 > 60) gc.fillText(String.format("TACS-2: %.1f%%", pctTacs2), x + 4, barY + 20);
         if (w3 > 60) gc.fillText(String.format("TACS-3: %.1f%%", pctTacs3), x + w2 + 4, barY + 20);
+    }
+
+    private VBox createMaskImageSection(WritableImage maskImage) {
+        VBox box = new VBox(4);
+
+        Label title = new Label("Foreground Mask");
+        title.setFont(Font.font("System", FontWeight.BOLD, 11));
+        box.getChildren().add(title);
+
+        Label desc = new Label("White = pixels included in analysis, Black = excluded");
+        desc.setFont(Font.font("System", 9));
+        desc.setStyle("-fx-text-fill: #666666;");
+        box.getChildren().add(desc);
+
+        ImageView imageView = new ImageView(maskImage);
+        imageView.setFitWidth(HISTOGRAM_WIDTH);
+        imageView.setPreserveRatio(true);
+        imageView.setSmooth(true);
+        box.getChildren().add(imageView);
+
+        return box;
     }
 
     // Utility methods for safe JSON extraction

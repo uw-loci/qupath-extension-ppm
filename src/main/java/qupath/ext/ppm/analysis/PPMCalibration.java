@@ -75,8 +75,7 @@ public class PPMCalibration {
         PPMCalibration cal = new PPMCalibration(invSlope, invIntercept, hueOffset, rSquared, path);
 
         logger.info(
-                "Loaded PPM calibration from {}: angle = {:.4f} * hue_shifted + {:.4f}, hue_offset={:.4f}, R2={:.4f}"
-                        .replace("{:.4f}", "%.4f")
+                "Loaded PPM calibration from %s: angle = %.4f * hue_shifted + %.4f, hue_offset=%.4f, R2=%.4f"
                         .formatted(path.getFileName(), invSlope, invIntercept, hueOffset, rSquared));
 
         return cal;

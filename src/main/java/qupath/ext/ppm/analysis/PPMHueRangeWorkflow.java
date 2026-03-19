@@ -122,6 +122,7 @@ public class PPMHueRangeWorkflow {
         try {
             calibration = PPMCalibration.load(calibrationPath);
         } catch (Exception e) {
+            logger.error("Failed to load calibration from: {}", calibrationPath, e);
             Dialogs.showErrorMessage(
                     "PPM Hue Range Filter",
                     DocumentationHelper.withDocLink(
