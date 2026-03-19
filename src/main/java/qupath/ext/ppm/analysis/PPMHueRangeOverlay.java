@@ -42,6 +42,7 @@ public class PPMHueRangeOverlay extends AbstractOverlay {
     private volatile float saturationThreshold = 0.2f;
     private volatile float valueThreshold = 0.2f;
     private volatile int highlightRGB = 0x00FF00;
+    private volatile int minRgbIntensity = 100;
     private volatile boolean active = false;
 
     // Cached computation result (single volatile swap for thread safety)
@@ -135,6 +136,10 @@ public class PPMHueRangeOverlay extends AbstractOverlay {
 
     public void setHighlightRGB(int rgb) {
         this.highlightRGB = rgb & 0xFFFFFF;
+    }
+
+    public void setMinRgbIntensity(int threshold) {
+        this.minRgbIntensity = threshold;
     }
 
     public void setActive(boolean active) {
@@ -238,7 +243,7 @@ public class PPMHueRangeOverlay extends AbstractOverlay {
                 Color.RGBtoHSB(r, g, b, hsb);
 
                 int maxRgb = Math.max(r, Math.max(g, b));
-                if (hsb[1] >= satTh && hsb[2] >= valTh && maxRgb >= 100) {
+                if (hsb[1] >= satTh && hsb[2] >= valTh && maxRgb >= minRgbIntensity) {
                     valid++;
                     float angle = (float) calibration.hueToAngle(hsb[0]);
 

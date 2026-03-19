@@ -164,6 +164,7 @@ public class PPMHueRangeWorkflow {
             overlay.setAngleRange(panel.getAngleLow(), panel.getAngleHigh());
             overlay.setSaturationThreshold(panel.getSaturationThreshold());
             overlay.setValueThreshold(panel.getValueThreshold());
+            overlay.setMinRgbIntensity(panel.getMinRgbIntensity());
             overlay.setHighlightRGB(panel.getHighlightRGB());
             overlay.setOpacity(panel.getOverlayOpacity());
             overlay.recompute();
@@ -209,6 +210,7 @@ public class PPMHueRangeWorkflow {
         overlay.setAngleRange(panel.getAngleLow(), panel.getAngleHigh());
         overlay.setSaturationThreshold(panel.getSaturationThreshold());
         overlay.setValueThreshold(panel.getValueThreshold());
+        overlay.setMinRgbIntensity(panel.getMinRgbIntensity());
         overlay.setHighlightRGB(panel.getHighlightRGB());
         overlay.setOpacity(panel.getOverlayOpacity());
         overlay.recompute();

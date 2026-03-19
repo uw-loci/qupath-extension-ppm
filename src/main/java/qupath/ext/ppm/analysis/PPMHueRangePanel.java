@@ -46,12 +46,14 @@ public class PPMHueRangePanel extends VBox {
     private final Slider saturationSlider;
     private final Slider valueSlider;
     private final Slider opacitySlider;
+    private final Slider minIntensitySlider;
     private final ColorPicker colorPicker;
     private final Label statsLabel;
     private final Label angleLowValueLabel;
     private final Label angleHighValueLabel;
     private final Label satValueLabel;
     private final Label valValueLabel;
+    private final Label minIntValueLabel;
     private final Label opacityValueLabel;
 
     // Detection creation controls
@@ -132,8 +134,20 @@ public class PPMHueRangePanel extends VBox {
         threshGrid.add(valueSlider, 1, 1);
         threshGrid.add(valValueLabel, 2, 1);
 
+        minIntensitySlider = createSlider(0, 255, 100);
+        minIntensitySlider.setBlockIncrement(5);
+        minIntensitySlider.setTooltip(new Tooltip("Minimum max(R,G,B) pixel intensity.\n"
+                + "Excludes dark absorbing tissue (e.g. hematoxylin nuclei)\n"
+                + "whose color comes from dye, not birefringence.\n"
+                + "Set to 0 to disable. Default 100."));
+        minIntValueLabel = new Label("100");
+        threshGrid.add(new Label("Min intensity:"), 0, 2);
+        threshGrid.add(minIntensitySlider, 1, 2);
+        threshGrid.add(minIntValueLabel, 2, 2);
+
         satValueLabel.setMinWidth(35);
         valValueLabel.setMinWidth(35);
+        minIntValueLabel.setMinWidth(35);
 
         // Appearance
         Label appearLabel = new Label("Overlay Appearance:");
@@ -265,6 +279,10 @@ public class PPMHueRangePanel extends VBox {
             valValueLabel.setText(String.format("%.2f", newV.doubleValue()));
             debounce.playFromStart();
         });
+        minIntensitySlider.valueProperty().addListener((obs, oldV, newV) -> {
+            minIntValueLabel.setText(String.valueOf(newV.intValue()));
+            debounce.playFromStart();
+        });
         opacitySlider.valueProperty().addListener((obs, oldV, newV) -> {
             opacityValueLabel.setText(String.format("%.2f", newV.doubleValue()));
             debounce.playFromStart();
@@ -301,6 +319,10 @@ public class PPMHueRangePanel extends VBox {
 
     public float getValueThreshold() {
         return (float) valueSlider.getValue();
+    }
+
+    public int getMinRgbIntensity() {
+        return (int) minIntensitySlider.getValue();
     }
 
     public double getOverlayOpacity() {
