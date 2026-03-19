@@ -106,7 +106,7 @@ Once calibrated, the analysis workflows are available:
 
 ## Installation
 
-1. Download `qupath-extension-ppm-0.1.0-all.jar` from the [latest release](https://github.com/uw-loci/qupath-extension-ppm/releases)
+1. Download `qupath-extension-ppm-0.1.3-all.jar` from the [latest release](https://github.com/uw-loci/qupath-extension-ppm/releases)
 2. Copy the JAR to your QuPath `extensions/` directory
 3. Restart QuPath
 
@@ -128,7 +128,7 @@ cd qupath-extension-ppm
 ./gradlew shadowJar
 ```
 
-The output JAR is at `build/libs/qupath-extension-ppm-0.1.0-all.jar`.
+The output JAR is at `build/libs/qupath-extension-ppm-0.1.3-all.jar`.
 
 ---
 
