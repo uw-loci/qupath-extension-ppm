@@ -365,18 +365,12 @@ public class PPMModalityHandler implements ModalityHandler {
 
         // --- Environment management ---
         items.add(new ModalityMenuItem(
-                "ppmSetupEnvironment",
-                "Setup PPM Analysis Environment...",
-                "Download and install the Python environment required for PPM analysis. "
-                        + "This includes ppm_library and all its dependencies (~500 MB on first run). "
-                        + "Subsequent launches reuse the cached environment.",
-                PPMModalityHandler::showSetupEnvironmentDialog));
-        items.add(new ModalityMenuItem(
-                "ppmRebuildEnvironment",
-                "Rebuild PPM Analysis Environment...",
-                "Delete and rebuild the PPM analysis Python environment from scratch. "
-                        + "Use this if the environment becomes corrupted or needs updating.",
-                PPMModalityHandler::showRebuildEnvironmentDialog));
+                "ppmManageEnvironment",
+                "PPM Analysis Environment...",
+                "Set up, update, or rebuild the Python environment for PPM analysis. "
+                        + "Automatically detects whether the environment needs to be created, "
+                        + "updated, or is already up to date.",
+                PPMModalityHandler::showManageEnvironmentDialog));
         items.add(new ModalityMenuItem(
                 "ppmPythonConsole",
                 "Python Console...",
@@ -439,33 +433,47 @@ public class PPMModalityHandler implements ModalityHandler {
     }
 
     /**
-     * Shows the multi-state setup wizard for the PPM analysis environment.
+     * Unified environment management: detects state and offers the appropriate action.
+     * <ul>
+     *   <li>No environment: runs setup wizard</li>
+     *   <li>Environment exists and up to date: shows status with option to rebuild</li>
+     *   <li>Environment exists but outdated: shows status with option to rebuild</li>
+     * </ul>
      */
-    private static void showSetupEnvironmentDialog() {
-        if (ApposePPMService.getInstance().isAvailable()) {
-            Dialogs.showMessageDialog(
-                    "PPM Analysis Environment", "PPM analysis environment is already set up and ready.");
+    private static void showManageEnvironmentDialog() {
+        ApposePPMService service = ApposePPMService.getInstance();
+        QuPathGUI gui = QuPathGUI.getInstance();
+        javafx.stage.Window owner = gui != null ? gui.getStage() : null;
+
+        if (!ApposePPMService.isEnvironmentBuilt()) {
+            // No environment exists -- go straight to setup
+            SetupEnvironmentDialog dialog = new SetupEnvironmentDialog(owner, null);
+            dialog.show();
             return;
         }
 
-        QuPathGUI gui = QuPathGUI.getInstance();
-        javafx.stage.Window owner = gui != null ? gui.getStage() : null;
-        SetupEnvironmentDialog dialog = new SetupEnvironmentDialog(owner, null);
-        dialog.show();
-    }
+        // Environment exists -- show status and offer rebuild
+        String installed = service.getInstalledPpmVersion();
+        String required = ApposePPMService.getRequiredPpmVersion();
+        boolean compatible = service.isVersionCompatible();
+        boolean available = service.isAvailable();
 
-    /**
-     * Shuts down and deletes the PPM analysis environment, then shows the setup wizard.
-     */
-    private static void showRebuildEnvironmentDialog() {
-        boolean confirm = Dialogs.showConfirmDialog(
-                "Rebuild PPM Environment",
-                "This will delete and rebuild the PPM analysis Python environment.\n"
-                        + "This may take several minutes.\n\nContinue?");
-        if (!confirm) return;
+        StringBuilder msg = new StringBuilder();
+        msg.append("Environment: ").append(ApposePPMService.getEnvironmentPath()).append("\n\n");
+        if (available) {
+            msg.append("ppm_library version: ").append(installed != null ? installed : "unknown").append("\n");
+            msg.append("Required version: >= ").append(required).append("\n");
+            msg.append("Status: ").append(compatible ? "Ready" : "OUTDATED - rebuild recommended").append("\n");
+        } else {
+            msg.append("Status: Environment exists but service is not initialized.\n");
+        }
+        msg.append("\nRebuild will delete and reinstall the environment (~500 MB download).\n");
+        msg.append("This is needed when ppm_library has been updated.");
+
+        boolean rebuild = Dialogs.showConfirmDialog("PPM Analysis Environment", msg.toString());
+        if (!rebuild) return;
 
         try {
-            ApposePPMService service = ApposePPMService.getInstance();
             service.shutdown();
             service.deleteEnvironment();
         } catch (Exception e) {
@@ -474,9 +482,6 @@ public class PPMModalityHandler implements ModalityHandler {
             return;
         }
 
-        // Show the setup wizard to rebuild
-        QuPathGUI gui = QuPathGUI.getInstance();
-        javafx.stage.Window owner = gui != null ? gui.getStage() : null;
         SetupEnvironmentDialog dialog = new SetupEnvironmentDialog(owner, null);
         dialog.show();
     }
