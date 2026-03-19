@@ -53,6 +53,11 @@ try:
     except NameError:
         roi = None
 
+    try:
+        min_intensity = int(min_rgb_intensity)
+    except NameError:
+        min_intensity = 100
+
     # Load calibration
     calibration = RadialCalibrationResult.load(calibration_path)
 
@@ -79,6 +84,7 @@ try:
         value_threshold=value_threshold,
         histogram_bins=bins,
         foreground_mask=fg_mask,
+        min_rgb_intensity=min_intensity,
     )
 
     # Apply ROI mask if provided (restrict to annotation shape)

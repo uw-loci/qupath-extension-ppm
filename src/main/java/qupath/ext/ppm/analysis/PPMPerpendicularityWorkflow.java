@@ -556,6 +556,23 @@ public class PPMPerpendicularityWorkflow {
         grid.add(valSpinner, 1, row);
         row++;
 
+        Label minIntLabel = new Label("Min pixel intensity:");
+        grid.add(minIntLabel, 0, row);
+        Spinner<Integer> minIntensitySpinner =
+                new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 255, 100, 10));
+        minIntensitySpinner.setEditable(true);
+        Tooltip minIntTip = new Tooltip("Range: 0-255. Minimum max(R,G,B) for a pixel to be included.\n"
+                + "Excludes dark absorbing tissue such as hematoxylin-stained\n"
+                + "nuclei, whose color comes from dye absorption rather than\n"
+                + "birefringence.\n\n"
+                + "A nucleus pixel of (60,50,80) has max=80 and would be\n"
+                + "excluded at the default threshold of 100.\n"
+                + "Set to 0 to disable. Default 100.");
+        minIntTip.setShowDelay(Duration.millis(400));
+        minIntensitySpinner.setTooltip(minIntTip);
+        grid.add(minIntensitySpinner, 1, row);
+        row++;
+
         // -- Pixel classifier controls --
         Label classifierLabel = new Label("Classifier:");
         grid.add(classifierLabel, 0, row);
@@ -642,6 +659,7 @@ public class PPMPerpendicularityWorkflow {
             int smoothWindow = smoothWindowSpinner.getValue();
             int minCollagenArea = minAreaSpinner.getValue();
             double maskSigma = maskSigmaSpinner.getValue();
+            int minRgbIntensity = minIntensitySpinner.getValue();
 
             // Persist user-modified values for next session
             PPMPreferences.setDilationUm(dilationUm);
@@ -775,6 +793,7 @@ public class PPMPerpendicularityWorkflow {
                                 smoothWindow,
                                 minCollagenArea,
                                 maskSigma,
+                                minRgbIntensity,
                                 annotationOutputDir);
 
                         // Save JSON result
@@ -912,6 +931,7 @@ public class PPMPerpendicularityWorkflow {
             int smoothingWindow,
             int minCollagenArea,
             double maskSmoothingSigma,
+            int minRgbIntensity,
             Path outputDir)
             throws Exception {
 
@@ -993,6 +1013,7 @@ public class PPMPerpendicularityWorkflow {
             inputs.put("smoothing_window", smoothingWindow);
             inputs.put("min_collagen_area", minCollagenArea);
             inputs.put("mask_smoothing_sigma", maskSmoothingSigma);
+            inputs.put("min_rgb_intensity", minRgbIntensity);
 
             if (birefNDArray != null) {
                 inputs.put("biref_image", birefNDArray);

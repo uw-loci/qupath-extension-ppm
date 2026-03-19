@@ -94,6 +94,11 @@ try:
     except NameError:
         mask_sigma = 2.0
 
+    try:
+        min_intensity = int(min_rgb_intensity)
+    except NameError:
+        min_intensity = 100
+
     # Load calibration from file
     calibration = RadialCalibrationResult.load(calibration_path)
 
@@ -121,6 +126,7 @@ try:
         saturation_threshold=saturation_threshold,
         value_threshold=value_threshold,
         foreground_mask=fg_mask,
+        min_rgb_intensity=min_intensity,
     )
 
     # Compute diagnostic mask statistics so the user can understand
@@ -137,9 +143,11 @@ try:
         saturation_threshold=saturation_threshold,
         value_threshold=value_threshold,
         exclude_clipped=True,
+        min_rgb_intensity=min_intensity,
     )
     hsv_valid_count = int(np.count_nonzero(hsv_result['valid_mask']))
     clipped_count = hsv_result.get('n_clipped', 0)
+    dark_count = hsv_result.get('n_dark_excluded', 0)
 
     biref_valid_count = -1  # sentinel: not applicable
     if biref_arr is not None:
@@ -188,6 +196,7 @@ try:
         'total_pixels': total_pixels,
         'hsv_valid_pixels': hsv_valid_count,
         'clipped_pixels': clipped_count if clipped_count > 0 else result_clipped,
+        'dark_excluded_pixels': dark_count,
         'biref_valid_pixels': biref_valid_count,
         'combined_valid_pixels': combined_valid_count,
         'zone_pixels': int(np.count_nonzero(zone_mask)),

@@ -237,7 +237,8 @@ public class PPMHueRangeOverlay extends AbstractOverlay {
 
                 Color.RGBtoHSB(r, g, b, hsb);
 
-                if (hsb[1] >= satTh && hsb[2] >= valTh) {
+                int maxRgb = Math.max(r, Math.max(g, b));
+                if (hsb[1] >= satTh && hsb[2] >= valTh && maxRgb >= 100) {
                     valid++;
                     float angle = (float) calibration.hueToAngle(hsb[0]);
 
