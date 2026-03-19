@@ -61,6 +61,12 @@ try:
     # Load calibration
     calibration = RadialCalibrationResult.load(calibration_path)
 
+    # --- Diagnostic: log calibration coefficients ---
+    logger.info("DIAG calibration: inv_slope=%.4f, inv_intercept=%.4f, "
+                "hue_offset=%.4f, r_squared=%.4f",
+                calibration.inv_slope, calibration.inv_intercept,
+                calibration.hue_offset, calibration.r_squared)
+
     # Build combined foreground mask from biref and/or roi
     combined_mask = None
     if biref_arr is not None:
@@ -86,6 +92,36 @@ try:
         foreground_mask=fg_mask,
         min_rgb_intensity=min_intensity,
     )
+
+    # --- Diagnostic: log hue and angle distributions ---
+    mask_pre_roi = result['mask']
+    valid_hues = result.get('hue', np.array([]))[mask_pre_roi] if 'hue' in result else None
+    valid_angles = result['angles'][mask_pre_roi]
+    valid_angles = valid_angles[~np.isnan(valid_angles)]
+
+    if valid_hues is not None and len(valid_hues) > 0:
+        logger.info("DIAG hue stats (valid pixels): n=%d, mean=%.4f, std=%.4f, "
+                    "min=%.4f, max=%.4f, median=%.4f",
+                    len(valid_hues), np.mean(valid_hues), np.std(valid_hues),
+                    np.min(valid_hues), np.max(valid_hues), np.median(valid_hues))
+    if len(valid_angles) > 0:
+        logger.info("DIAG angle stats (pre-ROI): n=%d, mean=%.1f, std=%.1f, "
+                    "min=%.1f, max=%.1f, median=%.1f",
+                    len(valid_angles), np.mean(valid_angles), np.std(valid_angles),
+                    np.min(valid_angles), np.max(valid_angles), np.median(valid_angles))
+        # Log angle histogram in 30-degree bins for quick overview
+        counts_30, _ = np.histogram(valid_angles, bins=[0, 30, 60, 90, 120, 150, 180])
+        logger.info("DIAG angle bins [0-30, 30-60, 60-90, 90-120, 120-150, 150-180]: %s",
+                    counts_30.tolist())
+
+    # Check for RGB stats of valid pixels
+    valid_rgb = sum_arr[mask_pre_roi]
+    if len(valid_rgb) > 0:
+        logger.info("DIAG RGB stats of valid pixels: R mean=%.1f, G mean=%.1f, B mean=%.1f, "
+                    "max(RGB) mean=%.1f",
+                    np.mean(valid_rgb[:, 0]), np.mean(valid_rgb[:, 1]),
+                    np.mean(valid_rgb[:, 2]),
+                    np.mean(np.max(valid_rgb, axis=1)))
 
     # Apply ROI mask if provided (restrict to annotation shape)
     if roi is not None:
