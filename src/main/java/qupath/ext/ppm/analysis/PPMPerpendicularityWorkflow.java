@@ -1411,6 +1411,14 @@ public class PPMPerpendicularityWorkflow {
             logger.info("PPM analysis environment not ready, initializing...");
             service.initialize(msg -> logger.info("PPM setup: {}", msg));
         }
+        if (!service.isVersionCompatible()) {
+            throw new IOException(
+                    "ppm_library " + service.getInstalledPpmVersion()
+                            + " is outdated (need " + ApposePPMService.getRequiredPpmVersion()
+                            + "+). Delete the environment at "
+                            + ApposePPMService.getEnvironmentPath()
+                            + " and restart QuPath to rebuild.");
+        }
     }
 
     private static String findCalibrationPath(ProjectImageEntry<BufferedImage> entry, Project<BufferedImage> project) {

@@ -52,11 +52,22 @@ public class ApposePPMService {
     private static final String PPM_LIBRARY_PIP_URL =
             "ppm-library @ https://github.com/uw-loci/" + "ppm_library/archive/refs/heads/main.tar.gz";
 
+    /**
+     * Minimum required ppm-library version for this extension version.
+     * <p>IMPORTANT: Update this constant whenever ppm_library changes
+     * affect the extension (new parameters, API changes, bug fixes).
+     * The extension will auto-upgrade ppm_library if the installed
+     * version is older than this.</p>
+     */
+    private static final String REQUIRED_PPM_VERSION = "1.3.1";
+
     private static ApposePPMService instance;
 
     private Environment environment;
     private Service pythonService;
     private boolean initialized;
+    private boolean versionCompatible;
+    private String installedPpmVersion;
     private String initError;
     private Thread shutdownHook;
 
@@ -84,6 +95,28 @@ public class ApposePPMService {
         }
         Path envDir = getEnvironmentPath();
         return Files.isDirectory(envDir.resolve(".pixi"));
+    }
+
+    /**
+     * Returns whether the installed ppm_library version is compatible with this extension.
+     * Returns false if the environment hasn't been initialized yet, or if the version is too old.
+     */
+    public boolean isVersionCompatible() {
+        return initialized && versionCompatible;
+    }
+
+    /**
+     * Returns the installed ppm_library version, or null if not yet detected.
+     */
+    public String getInstalledPpmVersion() {
+        return installedPpmVersion;
+    }
+
+    /**
+     * Returns the minimum required ppm_library version for this extension.
+     */
+    public static String getRequiredPpmVersion() {
+        return REQUIRED_PPM_VERSION;
     }
 
     /**
@@ -183,19 +216,72 @@ public class ApposePPMService {
                     throw new IOException("Python init failed: " + pythonInitError);
                 }
 
+                installedPpmVersion = ppmVersion;
                 logger.info("PPM environment verified: ppm_library {}", ppmVersion);
+
+                // Check if the installed version meets the minimum requirement.
+                // If not, auto-upgrade and restart the service.
+                if (!isVersionSufficient(ppmVersion, REQUIRED_PPM_VERSION)) {
+                    logger.warn(
+                            "ppm_library {} is older than required {}. Auto-upgrading...",
+                            ppmVersion,
+                            REQUIRED_PPM_VERSION);
+                    report(statusCallback, "Upgrading ppm_library (" + ppmVersion + " -> " + REQUIRED_PPM_VERSION + "+)...");
+
+                    // Shut down old service before upgrading
+                    if (pythonService != null) {
+                        pythonService.close();
+                        pythonService = null;
+                    }
+
+                    // Re-run pip install to get latest
+                    installPPMLibrary(statusCallback);
+
+                    // Restart service and re-verify
+                    pythonService = environment.python();
+                    pythonService.debug(msg -> {
+                        logger.info("[PPM Python] {}", msg);
+                        qupath.ext.ppm.ui.PythonConsoleWindow.appendMessage(msg);
+                    });
+                    pythonService.init("import numpy\n" + loadScript("init_ppm.py"));
+
+                    Task reverifyTask = pythonService.task(verifyScript);
+                    reverifyTask.waitFor();
+                    ppmVersion = String.valueOf(reverifyTask.outputs.get("ppm_version"));
+                    installedPpmVersion = ppmVersion;
+
+                    if (!isVersionSufficient(ppmVersion, REQUIRED_PPM_VERSION)) {
+                        logger.error(
+                                "ppm_library {} still does not meet required {} after upgrade",
+                                ppmVersion,
+                                REQUIRED_PPM_VERSION);
+                        versionCompatible = false;
+                        initError = "ppm_library " + ppmVersion + " is outdated. "
+                                + "Required: " + REQUIRED_PPM_VERSION + "+. "
+                                + "The GitHub main branch may not have been updated yet.";
+                    } else {
+                        logger.info("ppm_library upgraded to {}", ppmVersion);
+                        versionCompatible = true;
+                    }
+                } else {
+                    versionCompatible = true;
+                }
 
                 String extVersion = GeneralTools.getPackageVersion(ApposePPMService.class);
                 logger.info("=== PPM Analysis Environment ===");
                 logger.info("  Extension version: {}", extVersion != null ? extVersion : "dev");
                 logger.info("  ppm_library version: {}", ppmVersion);
+                logger.info("  Required ppm_library: >= {}", REQUIRED_PPM_VERSION);
+                logger.info("  Version compatible: {}", versionCompatible);
                 logger.info("  Environment path: {}", getEnvironmentPath());
                 logger.info("=================================");
 
                 initialized = true;
-                initError = null;
+                initError = versionCompatible ? null : initError;
                 registerShutdownHook();
-                report(statusCallback, "Setup complete! (ppm_library " + ppmVersion + ")");
+                report(statusCallback, versionCompatible
+                        ? "Setup complete! (ppm_library " + ppmVersion + ")"
+                        : "WARNING: ppm_library " + ppmVersion + " is outdated (need " + REQUIRED_PPM_VERSION + "+)");
                 logger.info("PPM Appose Python service initialized");
 
             } finally {
@@ -612,5 +698,41 @@ public class ApposePPMService {
         if (callback != null) {
             callback.accept(message);
         }
+    }
+
+    /**
+     * Compares two semantic version strings (e.g., "1.3.0" vs "1.3.1").
+     * Returns true if {@code installed} is >= {@code required}.
+     */
+    static boolean isVersionSufficient(String installed, String required) {
+        if (installed == null || installed.isEmpty()
+                || "unknown".equals(installed) || "null".equals(installed)) {
+            return false;
+        }
+        try {
+            int[] inst = parseVersion(installed);
+            int[] req = parseVersion(required);
+            for (int i = 0; i < Math.max(inst.length, req.length); i++) {
+                int a = i < inst.length ? inst[i] : 0;
+                int b = i < req.length ? req[i] : 0;
+                if (a > b) return true;
+                if (a < b) return false;
+            }
+            return true; // equal
+        } catch (NumberFormatException e) {
+            logger.warn("Could not parse version string: installed='{}', required='{}'", installed, required);
+            return false;
+        }
+    }
+
+    private static int[] parseVersion(String version) {
+        // Strip any suffix like ".dev0", "-rc1", etc.
+        String clean = version.replaceAll("[^0-9.].*", "");
+        String[] parts = clean.split("\\.");
+        int[] result = new int[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            result[i] = Integer.parseInt(parts[i]);
+        }
+        return result;
     }
 }
