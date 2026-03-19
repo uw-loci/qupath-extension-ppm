@@ -3,7 +3,11 @@ package qupath.ext.ppm.analysis;
 import javafx.animation.PauseTransition;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import java.util.function.Consumer;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
@@ -34,6 +38,8 @@ import qupath.ext.ppm.PPMPreferences;
 public class PPMHueRangePanel extends VBox {
 
     private static final double DEBOUNCE_MS = 400;
+    private static final double HUE_BAR_WIDTH = 280;
+    private static final double HUE_BAR_HEIGHT = 20;
 
     private final Slider angleLowSlider;
     private final Slider angleHighSlider;
@@ -55,9 +61,14 @@ public class PPMHueRangePanel extends VBox {
 
     private final PauseTransition debounce;
 
+    private final Canvas hueBar;
+    private final CheckBox showOverlayBox;
+
     private Runnable onParametersChanged;
     private Runnable onClear;
     private Runnable onCreateDetections;
+    private Consumer<Boolean> onVisibilityChanged;
+    private PPMCalibration calibration;
 
     public PPMHueRangePanel() {
         setSpacing(10);
@@ -92,6 +103,9 @@ public class PPMHueRangePanel extends VBox {
 
         angleLowValueLabel.setMinWidth(35);
         angleHighValueLabel.setMinWidth(35);
+
+        // Hue spectrum bar (colored by calibration)
+        hueBar = new Canvas(HUE_BAR_WIDTH, HUE_BAR_HEIGHT + 15);
 
         // Thresholds
         Label threshLabel = new Label("Validity Thresholds:");
@@ -150,6 +164,15 @@ public class PPMHueRangePanel extends VBox {
         statsLabel.setFont(Font.font("Monospaced", 11));
         statsLabel.setWrapText(true);
 
+        // Show/hide overlay checkbox
+        showOverlayBox = new CheckBox("Show overlay");
+        showOverlayBox.setSelected(true);
+        showOverlayBox.setTooltip(new Tooltip("Toggle the hue range overlay on/off.\n"
+                + "Uncheck to temporarily hide the overlay."));
+        showOverlayBox.selectedProperty().addListener((obs, oldV, newV) -> {
+            if (onVisibilityChanged != null) onVisibilityChanged.accept(newV);
+        });
+
         // Clear button
         Button clearButton = new Button("Clear Overlay");
         clearButton.setTooltip(new Tooltip("Remove the hue range filter overlay from the viewer."));
@@ -157,7 +180,7 @@ public class PPMHueRangePanel extends VBox {
             if (onClear != null) onClear.run();
         });
 
-        HBox overlayButtons = new HBox(8, clearButton);
+        HBox overlayButtons = new HBox(12, showOverlayBox, clearButton);
         overlayButtons.setAlignment(Pos.CENTER_LEFT);
 
         // --- Object Creation Section ---
@@ -205,6 +228,7 @@ public class PPMHueRangePanel extends VBox {
                         title,
                         angleLabel,
                         angleGrid,
+                        hueBar,
                         threshLabel,
                         threshGrid,
                         appearLabel,
@@ -225,10 +249,12 @@ public class PPMHueRangePanel extends VBox {
         // Wire slider listeners
         angleLowSlider.valueProperty().addListener((obs, oldV, newV) -> {
             angleLowValueLabel.setText(String.valueOf(newV.intValue()));
+            drawHueBar();
             debounce.playFromStart();
         });
         angleHighSlider.valueProperty().addListener((obs, oldV, newV) -> {
             angleHighValueLabel.setText(String.valueOf(newV.intValue()));
+            drawHueBar();
             debounce.playFromStart();
         });
         saturationSlider.valueProperty().addListener((obs, oldV, newV) -> {
@@ -323,6 +349,81 @@ public class PPMHueRangePanel extends VBox {
         statsLabel.setText(String.format(
                 "Matching: %,d / %,d valid pixels (%.1f%%)\n" + "Angle range: %.0f - %.0f deg (visible area)",
                 matchingPixels, totalValidPixels, pct, angleLowSlider.getValue(), angleHighSlider.getValue()));
+    }
+
+    /** Sets the callback invoked when the show overlay checkbox changes. */
+    public void setOnOverlayVisibilityChanged(Consumer<Boolean> callback) {
+        this.onVisibilityChanged = callback;
+    }
+
+    /** Returns whether the overlay should be visible. */
+    public boolean isOverlayVisible() {
+        return showOverlayBox.isSelected();
+    }
+
+    /**
+     * Sets the calibration used to render the hue spectrum bar.
+     * Call this after constructing the panel to enable the hue visualization.
+     */
+    public void setCalibration(PPMCalibration cal) {
+        this.calibration = cal;
+        drawHueBar();
+    }
+
+    /** Draws the hue spectrum bar colored by the calibration's angle-to-hue mapping. */
+    private void drawHueBar() {
+        GraphicsContext gc = hueBar.getGraphicsContext2D();
+        double w = hueBar.getWidth();
+        gc.clearRect(0, 0, w, hueBar.getHeight());
+
+        if (calibration == null) {
+            gc.setFill(Color.gray(0.85));
+            gc.fillRect(0, 0, w, HUE_BAR_HEIGHT);
+            gc.setFill(Color.gray(0.5));
+            gc.setFont(Font.font("System", 9));
+            gc.fillText("No calibration loaded", 4, HUE_BAR_HEIGHT / 2 + 3);
+            return;
+        }
+
+        // Draw hue spectrum: each column colored by the PPM hue at that angle
+        for (int px = 0; px < (int) w; px++) {
+            double angle = px * 180.0 / w;
+            double hue = calibration.angleToHue(angle);
+            // Ensure hue is in 0-1 range
+            hue = ((hue % 1.0) + 1.0) % 1.0;
+            gc.setFill(Color.hsb(hue * 360, 1.0, 1.0));
+            gc.fillRect(px, 0, 1, HUE_BAR_HEIGHT);
+        }
+
+        // Dim areas outside the selected angle range
+        double low = angleLowSlider.getValue();
+        double high = angleHighSlider.getValue();
+        double lowPx = low * w / 180.0;
+        double highPx = high * w / 180.0;
+
+        gc.setFill(Color.rgb(0, 0, 0, 0.6));
+        if (low <= high) {
+            gc.fillRect(0, 0, lowPx, HUE_BAR_HEIGHT);
+            gc.fillRect(highPx, 0, w - highPx, HUE_BAR_HEIGHT);
+        } else {
+            // Wrap-around range: dim between high and low
+            gc.fillRect(highPx, 0, lowPx - highPx, HUE_BAR_HEIGHT);
+        }
+
+        // Range marker lines
+        gc.setStroke(Color.WHITE);
+        gc.setLineWidth(2);
+        gc.strokeLine(lowPx, 0, lowPx, HUE_BAR_HEIGHT);
+        gc.strokeLine(highPx, 0, highPx, HUE_BAR_HEIGHT);
+
+        // Degree labels
+        gc.setFill(Color.BLACK);
+        gc.setFont(Font.font("System", 9));
+        for (int deg = 0; deg <= 180; deg += 45) {
+            double x = deg * w / 180.0;
+            String label = String.valueOf(deg);
+            gc.fillText(label, x - (deg == 180 ? 10 : deg == 0 ? 0 : 4), HUE_BAR_HEIGHT + 12);
+        }
     }
 
     private static Slider createSlider(double min, double max, double value) {

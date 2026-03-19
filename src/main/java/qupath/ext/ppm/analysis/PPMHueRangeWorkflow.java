@@ -148,6 +148,13 @@ public class PPMHueRangeWorkflow {
 
         // Create control panel
         PPMHueRangePanel panel = new PPMHueRangePanel();
+        panel.setCalibration(calibration);
+
+        // Wire overlay visibility toggle
+        panel.setOnOverlayVisibilityChanged(visible -> {
+            overlay.setActive(visible);
+            viewer.repaint();
+        });
 
         // Wire stats updates
         overlay.setStatsListener((matching, total) -> Platform.runLater(() -> panel.updateStats(matching, total)));
