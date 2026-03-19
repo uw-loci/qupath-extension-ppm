@@ -149,7 +149,7 @@ try:
 
     # Remove small connected components (area threshold)
     if min_area > 0:
-        analysis_mask = remove_small_objects(analysis_mask, min_size=min_area)
+        analysis_mask = remove_small_objects(analysis_mask, max_size=min_area)
 
     final_valid_count = int(np.count_nonzero(analysis_mask))
 
