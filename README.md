@@ -1,4 +1,4 @@
-# QuPath PPM (Polarized light Microscopy) Extension
+# QuPath PPM (Polychromatic Polarization Microscopy) Extension
 
 [![QuPath Version](https://img.shields.io/badge/qupath-0.6.0+-blue)](https://qupath.github.io/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](#license)
@@ -9,11 +9,13 @@
 
 ## Overview
 
-**qupath-extension-ppm** is a modality plugin for [QuPath](https://qupath.github.io/) and [QPSC](https://github.com/uw-loci/qupath-extension-qpsc) that provides calibration and analysis workflows for **Polarized light Microscopy (PPM)**.
+**qupath-extension-ppm** is a modality plugin for [QuPath](https://qupath.github.io/) and [QPSC](https://github.com/uw-loci/qupath-extension-qpsc) that provides calibration and analysis workflows for **Polychromatic Polarization Microscopy (PPM)**.
 
-PPM imaging captures multiple polarizer rotation angles per field of view, enabling quantitative analysis of birefringent structures such as collagen fiber orientation, organization, and alignment relative to tissue boundaries.
+PPM imaging captures multiple polarizer rotation angles per field of view, producing color-encoded images where hue represents fiber orientation. This enables quantitative analysis of birefringent structures such as collagen fiber orientation, organization, and alignment relative to tissue boundaries.
 
 This extension registers a `PPMModalityHandler` with QPSC's modality plugin system, adding PPM-specific menus, acquisition parameters, and analysis tools to QuPath.
+
+> **Reference:** Shribak, M. (2015). "Polychromatic polarization microscope: bringing colors to a colorless world." *Scientific Reports*, 5, 17340. [DOI: 10.1038/srep17340](https://doi.org/10.1038/srep17340)
 
 ### Related Repositories
 
