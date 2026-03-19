@@ -142,6 +142,7 @@ public class PPMPerpendicularityPanel extends VBox {
 
         int total = getInt(diag, "total_pixels", 0);
         int hsvValid = getInt(diag, "hsv_valid_pixels", 0);
+        int clipped = getInt(diag, "clipped_pixels", 0);
         int birefValid = getInt(diag, "biref_valid_pixels", -1);
         int combined = getInt(diag, "combined_valid_pixels", 0);
         int zonePx = getInt(diag, "zone_pixels", -1);
@@ -151,6 +152,9 @@ public class PPMPerpendicularityPanel extends VBox {
         StringBuilder sb = new StringBuilder();
         sb.append(String.format("Region pixels:    %,d%n", total));
         sb.append(String.format("HSV valid:        %,d (%s)%n", hsvValid, pct(hsvValid, total)));
+        if (clipped > 0) {
+            sb.append(String.format("RGB saturated:    %,d (%s) excluded%n", clipped, pct(clipped, total)));
+        }
         if (birefValid >= 0) {
             sb.append(String.format("Biref valid:      %,d (%s)%n", birefValid, pct(birefValid, total)));
         }

@@ -110,8 +110,10 @@ try:
         sum_arr, calibration,
         saturation_threshold=saturation_threshold,
         value_threshold=value_threshold,
+        exclude_clipped=True,
     )
     hsv_valid_count = int(np.count_nonzero(hsv_result['valid_mask']))
+    clipped_count = hsv_result.get('n_clipped', 0)
 
     biref_valid_count = -1  # sentinel: not applicable
     if biref_arr is not None:
@@ -151,10 +153,14 @@ try:
 
     final_valid_count = int(np.count_nonzero(analysis_mask))
 
+    # Get clipping count from the main result too
+    result_clipped = result.get('n_clipped_pixels', 0)
+
     # Add diagnostics to result
     result['mask_diagnostics'] = {
         'total_pixels': total_pixels,
         'hsv_valid_pixels': hsv_valid_count,
+        'clipped_pixels': clipped_count if clipped_count > 0 else result_clipped,
         'biref_valid_pixels': biref_valid_count,
         'combined_valid_pixels': combined_valid_count,
         'zone_pixels': int(np.count_nonzero(zone_mask)),
