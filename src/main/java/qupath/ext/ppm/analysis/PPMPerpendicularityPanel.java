@@ -133,6 +133,16 @@ public class PPMPerpendicularityPanel extends VBox {
             annotationBox.getChildren().add(createTACSResults(pstacs));
         }
 
+        // Extended TACS results (only shown when TACS-1 classification was enabled)
+        JsonObject extTacs = result.has("extended_tacs")
+                        && !result.get("extended_tacs").isJsonNull()
+                ? result.getAsJsonObject("extended_tacs")
+                : null;
+        if (extTacs != null) {
+            annotationBox.getChildren().add(new Separator());
+            annotationBox.getChildren().add(createExtendedTACSResults(extTacs));
+        }
+
         // Foreground mask image
         if (maskImage != null) {
             annotationBox.getChildren().add(new Separator());
@@ -415,6 +425,69 @@ public class PPMPerpendicularityPanel extends VBox {
         if (w2 > 60) gc.fillText(String.format("TACS-2: %.1f%%", pctTacs2), x + 4, barY + 20);
         gc.setFill(Color.BLACK);
         if (w3 > 60) gc.fillText(String.format("TACS-3: %.1f%%", pctTacs3), x + w2 + 4, barY + 20);
+    }
+
+    private VBox createExtendedTACSResults(JsonObject extTacs) {
+        VBox box = new VBox(4);
+
+        Label title = new Label("Extended TACS Classification");
+        title.setFont(Font.font("System", FontWeight.BOLD, 11));
+        box.getChildren().add(title);
+
+        Label ref = new Label("TACS-1: Provenzano et al., BMC Medicine 2006");
+        ref.setStyle("-fx-text-fill: #666666; -fx-font-size: 9px;");
+        box.getChildren().add(ref);
+
+        double pctTacs1 = getDouble(extTacs, "pct_tacs1", 0);
+        double pctTacs2 = getDouble(extTacs, "pct_tacs2", 0);
+        double pctTacs3 = getDouble(extTacs, "pct_tacs3", 0);
+        int nClusters1 = getInt(extTacs, "n_tacs1_clusters", 0);
+        int nClusters3 = getInt(extTacs, "n_tacs3_clusters", 0);
+        double minDensity = getDouble(extTacs, "min_collagen_density", 0.1);
+
+        Label statsLabel = new Label(String.format(
+                "TACS-1 (sparse):        %.1f%%  (%d clusters)\n"
+                        + "TACS-2 (parallel):      %.1f%%\n"
+                        + "TACS-3 (perpendicular): %.1f%%  (%d clusters)\n"
+                        + "Density threshold: %.2f",
+                pctTacs1, nClusters1, pctTacs2, pctTacs3, nClusters3, minDensity));
+        statsLabel.setFont(Font.font("Monospaced", 11));
+        box.getChildren().add(statsLabel);
+
+        Canvas tacsBar = new Canvas(HISTOGRAM_WIDTH, BAR_HEIGHT + 20);
+        drawExtendedTACSBar(tacsBar.getGraphicsContext2D(), pctTacs1, pctTacs2, pctTacs3);
+        box.getChildren().add(tacsBar);
+
+        return box;
+    }
+
+    private void drawExtendedTACSBar(GraphicsContext gc, double pct1, double pct2, double pct3) {
+        double barY = 5;
+        double totalWidth = HISTOGRAM_WIDTH - 20;
+        double x = 10;
+
+        // TACS-1 (yellow = sparse collagen)
+        double w1 = totalWidth * pct1 / 100.0;
+        gc.setFill(Color.rgb(255, 255, 0, 0.8));
+        gc.fillRect(x, barY, w1, BAR_HEIGHT);
+
+        // TACS-2 (orange = parallel)
+        double w2 = totalWidth * pct2 / 100.0;
+        gc.setFill(Color.rgb(255, 100, 0, 0.8));
+        gc.fillRect(x + w1, barY, w2, BAR_HEIGHT);
+
+        // TACS-3 (green = perpendicular)
+        double w3 = totalWidth * pct3 / 100.0;
+        gc.setFill(Color.rgb(0, 255, 65, 0.8));
+        gc.fillRect(x + w1 + w2, barY, w3, BAR_HEIGHT);
+
+        gc.setFont(Font.font("System", FontWeight.BOLD, 10));
+        gc.setFill(Color.BLACK);
+        if (w1 > 50) gc.fillText(String.format("T1: %.0f%%", pct1), x + 4, barY + 18);
+        gc.setFill(Color.WHITE);
+        if (w2 > 50) gc.fillText(String.format("T2: %.0f%%", pct2), x + w1 + 4, barY + 18);
+        gc.setFill(Color.BLACK);
+        if (w3 > 50) gc.fillText(String.format("T3: %.0f%%", pct3), x + w1 + w2 + 4, barY + 18);
     }
 
     private VBox createMaskImageSection(WritableImage maskImage) {

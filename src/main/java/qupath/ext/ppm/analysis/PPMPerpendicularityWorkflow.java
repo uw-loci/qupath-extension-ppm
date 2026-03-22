@@ -114,6 +114,8 @@ public class PPMPerpendicularityWorkflow {
     /** Pixels within this margin of the image border are excluded from TACS polylines. */
     private static final double IMAGE_BORDER_MARGIN_PX = 3.0;
 
+    // TACS-1 = bright yellow (sparse collagen)
+    private static final int TACS1_COLOR = ColorTools.packRGB(255, 255, 0);
     // TACS-2 = neon orange (high visibility on PPM images)
     private static final int TACS2_COLOR = ColorTools.packRGB(255, 100, 0);
     // TACS-3 = neon green (high visibility on PPM images)
@@ -422,6 +424,49 @@ public class PPMPerpendicularityWorkflow {
         grid.add(minLengthSpinner, 1, row);
         row++;
 
+        // --- Extended TACS section ---
+        Label extTacsHeader = new Label("Extended TACS (TACS-1/2/3)");
+        extTacsHeader.setStyle("-fx-font-weight: bold; -fx-padding: 8 0 2 0;");
+        grid.add(extTacsHeader, 0, row, 3, 1);
+        row++;
+
+        CheckBox extendedTacsBox = new CheckBox("Enable TACS-1 classification");
+        extendedTacsBox.setSelected(false);
+        Tooltip extTacsTip = new Tooltip("Adds TACS-1 classification for boundary regions where\n"
+                + "collagen density is below threshold (sparse/absent).\n"
+                + "TACS-1 = sparse collagen (Provenzano et al. 2006).\n\n"
+                + "PS-TACS results (TACS-2/3, Qian et al.) are always\n"
+                + "shown regardless. This adds TACS-1 polylines (yellow)\n"
+                + "and an Extended TACS section in the results panel.");
+        extTacsTip.setShowDelay(Duration.millis(400));
+        extendedTacsBox.setTooltip(extTacsTip);
+        grid.add(extendedTacsBox, 0, row, 2, 1);
+        row++;
+
+        Label densityLabel = new Label("Min collagen density:");
+        grid.add(densityLabel, 0, row);
+        Spinner<Double> densitySpinner =
+                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0.01, 0.5, 0.1, 0.01));
+        densitySpinner.setEditable(true);
+        Tooltip densityTip = new Tooltip("Range: 0.01-0.50. Normalized collagen density threshold.\n"
+                + "Contour pixels with less than this fraction of the peak\n"
+                + "observed density are classified as TACS-1 (sparse).\n\n"
+                + "0.10 = regions with <10% of peak density -> TACS-1.\n"
+                + "Increase to classify more regions as TACS-1.\n"
+                + "Decrease to require very sparse regions for TACS-1.");
+        densityTip.setShowDelay(Duration.millis(400));
+        densitySpinner.setTooltip(densityTip);
+        grid.add(densitySpinner, 1, row);
+        row++;
+
+        // Disable density spinner when extended TACS is off
+        densityLabel.setDisable(true);
+        densitySpinner.setDisable(true);
+        extendedTacsBox.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            densityLabel.setDisable(!newVal);
+            densitySpinner.setDisable(!newVal);
+        });
+
         // --- Smoothing & cleanup section ---
         Label smoothHeader = new Label("Smoothing & Cleanup");
         smoothHeader.setStyle("-fx-font-weight: bold; -fx-padding: 8 0 2 0;");
@@ -660,6 +705,8 @@ public class PPMPerpendicularityWorkflow {
             int minCollagenArea = minAreaSpinner.getValue();
             double maskSigma = maskSigmaSpinner.getValue();
             int minRgbIntensity = minIntensitySpinner.getValue();
+            boolean extendedTacs = extendedTacsBox.isSelected();
+            double minCollagenDensity = densitySpinner.getValue();
 
             // Persist user-modified values for next session
             PPMPreferences.setDilationUm(dilationUm);
@@ -743,8 +790,8 @@ public class PPMPerpendicularityWorkflow {
                         PathClass pc = obj.getPathClass();
                         if (pc != null) {
                             String name = pc.toString();
-                            if ("TACS-2".equals(name) || "TACS-3".equals(name)
-                                    || "PPM-Foreground".equals(name)) {
+                            if ("TACS-1".equals(name) || "TACS-2".equals(name)
+                                    || "TACS-3".equals(name) || "PPM-Foreground".equals(name)) {
                                 previousResults.add(obj);
                             }
                         }
@@ -794,6 +841,8 @@ public class PPMPerpendicularityWorkflow {
                                 minCollagenArea,
                                 maskSigma,
                                 minRgbIntensity,
+                                extendedTacs,
+                                minCollagenDensity,
                                 annotationOutputDir);
 
                         // Save JSON result
@@ -837,7 +886,21 @@ public class PPMPerpendicularityWorkflow {
                         }
                         allTacsPolylines.addAll(polylines);
 
-                        logger.info("Created {} TACS polylines for annotation '{}'", polylines.size(), annotationName);
+                        // Create TACS-1 polylines from extended TACS (if enabled)
+                        List<PathObject> tacs1Polylines = createTACS1Polylines(
+                                annResult.json,
+                                annResult.offsetX,
+                                annResult.offsetY,
+                                imageW,
+                                imageH,
+                                finalMinPolylineLength);
+                        for (PathObject p : tacs1Polylines) {
+                            p.getMeasurementList().put("Perp. parent", annotationIndex);
+                        }
+                        allTacsPolylines.addAll(tacs1Polylines);
+
+                        logger.info("Created {} TACS polylines ({} TACS-1) for annotation '{}'",
+                                polylines.size(), tacs1Polylines.size(), annotationName);
 
                         // Display results
                         final JsonObject finalResult = annResult.json;
@@ -932,6 +995,8 @@ public class PPMPerpendicularityWorkflow {
             int minCollagenArea,
             double maskSmoothingSigma,
             int minRgbIntensity,
+            boolean extendedTacs,
+            double minCollagenDensity,
             Path outputDir)
             throws Exception {
 
@@ -1014,6 +1079,8 @@ public class PPMPerpendicularityWorkflow {
             inputs.put("min_collagen_area", minCollagenArea);
             inputs.put("mask_smoothing_sigma", maskSmoothingSigma);
             inputs.put("min_rgb_intensity", minRgbIntensity);
+            inputs.put("extended_tacs", extendedTacs);
+            inputs.put("min_collagen_density", minCollagenDensity);
 
             if (birefNDArray != null) {
                 inputs.put("biref_image", birefNDArray);
@@ -1266,6 +1333,75 @@ public class PPMPerpendicularityWorkflow {
 
         ROI polylineRoi = ROIs.createPolylineROI(xs, ys, ImagePlane.getDefaultPlane());
         return PathObjects.createAnnotationObject(polylineRoi, pathClass);
+    }
+
+    /**
+     * Creates TACS-1 (sparse collagen) Polyline annotations from extended TACS data.
+     * Only creates polylines for class=1 segments. Returns empty list if extended TACS
+     * was not enabled or has no TACS-1 segments.
+     */
+    private static List<PathObject> createTACS1Polylines(
+            JsonObject result, int offsetX, int offsetY, int imageW, int imageH, int minSegmentLength) {
+
+        List<PathObject> polylines = new ArrayList<>();
+
+        JsonObject extTacs = result.has("extended_tacs") && !result.get("extended_tacs").isJsonNull()
+                ? result.getAsJsonObject("extended_tacs")
+                : null;
+        if (extTacs == null) return polylines;
+
+        JsonArray pointsArr = extTacs.has("contour_points") ? extTacs.getAsJsonArray("contour_points") : null;
+        JsonArray classArr =
+                extTacs.has("extended_tacs_class") ? extTacs.getAsJsonArray("extended_tacs_class") : null;
+        if (pointsArr == null || classArr == null || pointsArr.size() == 0) return polylines;
+
+        int n = Math.min(pointsArr.size(), classArr.size());
+        PathClass tacs1Class = PathClass.fromString("TACS-1", TACS1_COLOR);
+        tacs1Class.setColor(TACS1_COLOR);
+        double margin = IMAGE_BORDER_MARGIN_PX;
+
+        // Collect contiguous TACS-1 runs
+        List<TACSSegment> segments = new ArrayList<>();
+        TACSSegment current = null;
+
+        for (int i = 0; i < n; i++) {
+            int tacsClass = classArr.get(i).getAsInt();
+            if (tacsClass != 1) {
+                if (current != null && current.size() > 0) {
+                    segments.add(current);
+                    current = null;
+                }
+                continue;
+            }
+
+            JsonArray pt = pointsArr.get(i).getAsJsonArray();
+            double px = pt.get(0).getAsDouble() + offsetX;
+            double py = pt.get(1).getAsDouble() + offsetY;
+
+            if (px < margin || py < margin || px > imageW - margin || py > imageH - margin) {
+                if (current != null && current.size() > 0) {
+                    segments.add(current);
+                    current = null;
+                }
+                continue;
+            }
+
+            if (current == null) {
+                current = new TACSSegment(1);
+            }
+            current.add(px, py);
+        }
+        if (current != null && current.size() > 0) {
+            segments.add(current);
+        }
+
+        for (TACSSegment seg : segments) {
+            if (seg.size() < minSegmentLength) continue;
+            PathObject polyline = buildPolyline(seg.xCoords, seg.yCoords, tacs1Class);
+            if (polyline != null) polylines.add(polyline);
+        }
+
+        return polylines;
     }
 
     /**

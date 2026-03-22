@@ -99,6 +99,16 @@ try:
     except NameError:
         min_intensity = 100
 
+    try:
+        ext_tacs = bool(extended_tacs)
+    except NameError:
+        ext_tacs = False
+
+    try:
+        min_density = float(min_collagen_density)
+    except NameError:
+        min_density = 0.1
+
     # Load calibration from file
     calibration = RadialCalibrationResult.load(calibration_path)
 
@@ -127,6 +137,8 @@ try:
         value_threshold=value_threshold,
         foreground_mask=fg_mask,
         min_rgb_intensity=min_intensity,
+        extended_tacs=ext_tacs,
+        min_collagen_density=min_density,
     )
 
     # Use diagnostic counts and intermediate masks returned by
