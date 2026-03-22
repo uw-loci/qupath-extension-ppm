@@ -109,6 +109,11 @@ try:
     except NameError:
         min_density = 0.1
 
+    try:
+        min_signal = float(min_signal_threshold)
+    except NameError:
+        min_signal = 0.02
+
     # Load calibration from file
     calibration = RadialCalibrationResult.load(calibration_path)
 
@@ -139,6 +144,7 @@ try:
         min_rgb_intensity=min_intensity,
         extended_tacs=ext_tacs,
         min_collagen_density=min_density,
+        min_signal_threshold=min_signal,
     )
 
     # Use diagnostic counts and intermediate masks returned by

@@ -459,12 +459,32 @@ public class PPMPerpendicularityWorkflow {
         grid.add(densitySpinner, 1, row);
         row++;
 
-        // Disable density spinner when extended TACS is off
+        Label signalLabel = new Label("Min signal threshold:");
+        grid.add(signalLabel, 0, row);
+        Spinner<Double> signalSpinner =
+                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0.0, 0.2, 0.02, 0.01));
+        signalSpinner.setEditable(true);
+        Tooltip signalTip = new Tooltip("Range: 0-0.20. Normalized density below which a contour\n"
+                + "pixel is considered to have NO collagen signal at all\n"
+                + "(Unclassified). These segments get no polyline overlay.\n\n"
+                + "This filters out noise and non-collagen tissue at the\n"
+                + "boundary. Set to 0 to classify everything.\n"
+                + "Default 0.02 (2% of peak density).");
+        signalTip.setShowDelay(Duration.millis(400));
+        signalSpinner.setTooltip(signalTip);
+        grid.add(signalSpinner, 1, row);
+        row++;
+
+        // Disable extended TACS controls when checkbox is off
         densityLabel.setDisable(true);
         densitySpinner.setDisable(true);
+        signalLabel.setDisable(true);
+        signalSpinner.setDisable(true);
         extendedTacsBox.selectedProperty().addListener((obs, oldVal, newVal) -> {
             densityLabel.setDisable(!newVal);
             densitySpinner.setDisable(!newVal);
+            signalLabel.setDisable(!newVal);
+            signalSpinner.setDisable(!newVal);
         });
 
         // --- Smoothing & cleanup section ---
@@ -707,6 +727,7 @@ public class PPMPerpendicularityWorkflow {
             int minRgbIntensity = minIntensitySpinner.getValue();
             boolean extendedTacs = extendedTacsBox.isSelected();
             double minCollagenDensity = densitySpinner.getValue();
+            double minSignalThreshold = signalSpinner.getValue();
 
             // Persist user-modified values for next session
             PPMPreferences.setDilationUm(dilationUm);
@@ -843,6 +864,7 @@ public class PPMPerpendicularityWorkflow {
                                 minRgbIntensity,
                                 extendedTacs,
                                 minCollagenDensity,
+                                minSignalThreshold,
                                 annotationOutputDir);
 
                         // Save JSON result
@@ -997,6 +1019,7 @@ public class PPMPerpendicularityWorkflow {
             int minRgbIntensity,
             boolean extendedTacs,
             double minCollagenDensity,
+            double minSignalThreshold,
             Path outputDir)
             throws Exception {
 
@@ -1081,6 +1104,7 @@ public class PPMPerpendicularityWorkflow {
             inputs.put("min_rgb_intensity", minRgbIntensity);
             inputs.put("extended_tacs", extendedTacs);
             inputs.put("min_collagen_density", minCollagenDensity);
+            inputs.put("min_signal_threshold", minSignalThreshold);
 
             if (birefNDArray != null) {
                 inputs.put("biref_image", birefNDArray);
