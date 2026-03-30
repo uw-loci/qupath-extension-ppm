@@ -47,7 +47,7 @@ dependencies {
     shadow(libs.bundles.groovy)
 
     // Depend on QPSC for ModalityHandler, ModalityRegistry, socket client, config manager
-    shadow("io.github.uw-loci:qupath-extension-qpsc:0.3.6")
+    shadow("io.github.uw-loci:qupath-extension-qpsc:0.4.1")
 
     // Appose -- embedded Python environment for PPM analysis (ppm_library)
     implementation("org.apposed:appose:0.10.0")
