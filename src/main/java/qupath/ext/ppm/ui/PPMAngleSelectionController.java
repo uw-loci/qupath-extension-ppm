@@ -373,7 +373,7 @@ public class PPMAngleSelectionController {
 
             // Check background settings
             BackgroundSettingsReader.BackgroundSettings backgroundSettings =
-                    BackgroundSettingsReader.findBackgroundSettings(backgroundFolder, modality, objective, detector);
+                    BackgroundSettingsReader.findBackgroundSettings(backgroundFolder, modality, objective, detector, null);
 
             if (backgroundSettings == null) {
                 warningArea
@@ -505,7 +505,7 @@ public class PPMAngleSelectionController {
             }
 
             BackgroundSettingsReader.BackgroundSettings backgroundSettings =
-                    BackgroundSettingsReader.findBackgroundSettings(backgroundFolder, modality, objective, detector);
+                    BackgroundSettingsReader.findBackgroundSettings(backgroundFolder, modality, objective, detector, null);
 
             if (backgroundSettings == null) {
                 logger.debug(
@@ -680,7 +680,7 @@ public class PPMAngleSelectionController {
             if (backgroundFolder != null) {
                 BackgroundSettingsReader.BackgroundSettings backgroundSettings =
                         BackgroundSettingsReader.findBackgroundSettings(
-                                backgroundFolder, modality, objective, detector);
+                                backgroundFolder, modality, objective, detector, null);
 
                 if (backgroundSettings != null && backgroundSettings.angleExposures != null) {
                     // Find matching angle in background settings
@@ -996,7 +996,7 @@ public class PPMAngleSelectionController {
 
             // Check if background settings/images exist for this hardware combination
             BackgroundSettingsReader.BackgroundSettings backgroundSettings =
-                    BackgroundSettingsReader.findBackgroundSettings(backgroundFolder, modality, objective, detector);
+                    BackgroundSettingsReader.findBackgroundSettings(backgroundFolder, modality, objective, detector, null);
 
             if (backgroundSettings == null) {
                 return createBackgroundWarning(
