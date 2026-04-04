@@ -61,6 +61,11 @@ public class PPMPreferences {
     private static final StringProperty birefringenceThreshold =
             PathPrefs.createPersistentPreference("PPMBirefringenceThreshold", "100.0");
 
+    // Minimum intensity threshold for birefringence: dark pixels below this
+    // combined intensity (I+ + I-) are zeroed to suppress read-noise artifacts
+    private static final StringProperty birefringenceMinIntensity =
+            PathPrefs.createPersistentPreference("PPMBirefringenceMinIntensity", "10");
+
     // Number of bins for polarity plot rose diagrams (18 bins = 10 deg each)
     private static final StringProperty histogramBins = PathPrefs.createPersistentPreference("PPMHistogramBins", "18");
 
@@ -284,6 +289,22 @@ public class PPMPreferences {
 
     public static void setBirefringenceThreshold(double threshold) {
         birefringenceThreshold.set(String.valueOf(threshold));
+    }
+
+    public static StringProperty birefringenceMinIntensityProperty() {
+        return birefringenceMinIntensity;
+    }
+
+    public static int getBirefringenceMinIntensity() {
+        try {
+            return Integer.parseInt(birefringenceMinIntensity.get());
+        } catch (NumberFormatException e) {
+            return 10;
+        }
+    }
+
+    public static void setBirefringenceMinIntensity(int threshold) {
+        birefringenceMinIntensity.set(String.valueOf(threshold));
     }
 
     public static StringProperty histogramBinsProperty() {

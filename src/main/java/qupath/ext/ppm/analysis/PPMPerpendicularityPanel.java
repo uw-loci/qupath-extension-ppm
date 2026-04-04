@@ -80,8 +80,8 @@ public class PPMPerpendicularityPanel extends VBox {
     /**
      * Adds analysis results for one annotation.
      */
-    public void addResult(JsonObject result, String annotationName, int index, int totalAnnotations,
-                          WritableImage maskImage) {
+    public void addResult(
+            JsonObject result, String annotationName, int index, int totalAnnotations, WritableImage maskImage) {
 
         VBox annotationBox = new VBox(6);
         annotationBox.setPadding(new Insets(8));
@@ -134,10 +134,10 @@ public class PPMPerpendicularityPanel extends VBox {
         }
 
         // Extended TACS results (only shown when TACS-1 classification was enabled)
-        JsonObject extTacs = result.has("extended_tacs")
-                        && !result.get("extended_tacs").isJsonNull()
-                ? result.getAsJsonObject("extended_tacs")
-                : null;
+        JsonObject extTacs =
+                result.has("extended_tacs") && !result.get("extended_tacs").isJsonNull()
+                        ? result.getAsJsonObject("extended_tacs")
+                        : null;
         if (extTacs != null) {
             annotationBox.getChildren().add(new Separator());
             annotationBox.getChildren().add(createExtendedTACSResults(extTacs));
@@ -453,8 +453,7 @@ public class PPMPerpendicularityPanel extends VBox {
                         + "TACS-2 (parallel):         %.1f%%\n"
                         + "TACS-3 (perpendicular):    %.1f%%  (%d clusters)\n"
                         + "Signal threshold: %.2f | Density threshold: %.2f",
-                pctUnclass, pctTacs1, nClusters1, pctTacs2, pctTacs3, nClusters3,
-                minSignal, minDensity));
+                pctUnclass, pctTacs1, nClusters1, pctTacs2, pctTacs3, nClusters3, minSignal, minDensity));
         statsLabel.setFont(Font.font("Monospaced", 11));
         box.getChildren().add(statsLabel);
 

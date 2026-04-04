@@ -14,6 +14,7 @@ import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.BackgroundValidationResult;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityMenuItem;
+import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -123,6 +124,20 @@ public class PPMModalityHandler implements ModalityHandler {
     // ========================================================================
     // ModalityHandler methods (PPM extraction)
     // ========================================================================
+
+    /**
+     * Configures PPM-specific flags on the acquisition command builder.
+     *
+     * <p>Adds the birefringence minimum intensity threshold when it is set to a
+     * positive value, enabling dark-region noise suppression on the server side.</p>
+     */
+    @Override
+    public void configureCommandBuilder(AcquisitionCommandBuilder builder) {
+        int minIntensity = PPMPreferences.getBirefringenceMinIntensity();
+        if (minIntensity > 0) {
+            builder.birefMinIntensity(minIntensity);
+        }
+    }
 
     /**
      * Loads PPM profile-specific exposure defaults for the given hardware configuration.
@@ -459,11 +474,17 @@ public class PPMModalityHandler implements ModalityHandler {
         boolean available = service.isAvailable();
 
         StringBuilder msg = new StringBuilder();
-        msg.append("Environment: ").append(ApposePPMService.getEnvironmentPath()).append("\n\n");
+        msg.append("Environment: ")
+                .append(ApposePPMService.getEnvironmentPath())
+                .append("\n\n");
         if (available) {
-            msg.append("ppm_library version: ").append(installed != null ? installed : "unknown").append("\n");
+            msg.append("ppm_library version: ")
+                    .append(installed != null ? installed : "unknown")
+                    .append("\n");
             msg.append("Required version: >= ").append(required).append("\n");
-            msg.append("Status: ").append(compatible ? "Ready" : "OUTDATED - rebuild recommended").append("\n");
+            msg.append("Status: ")
+                    .append(compatible ? "Ready" : "OUTDATED - rebuild recommended")
+                    .append("\n");
         } else {
             msg.append("Status: Environment exists but service is not initialized.\n");
         }

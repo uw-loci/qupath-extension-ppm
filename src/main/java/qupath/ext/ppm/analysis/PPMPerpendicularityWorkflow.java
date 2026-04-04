@@ -811,8 +811,10 @@ public class PPMPerpendicularityWorkflow {
                         PathClass pc = obj.getPathClass();
                         if (pc != null) {
                             String name = pc.toString();
-                            if ("TACS-1".equals(name) || "TACS-2".equals(name)
-                                    || "TACS-3".equals(name) || "PPM-Foreground".equals(name)) {
+                            if ("TACS-1".equals(name)
+                                    || "TACS-2".equals(name)
+                                    || "TACS-3".equals(name)
+                                    || "PPM-Foreground".equals(name)) {
                                 previousResults.add(obj);
                             }
                         }
@@ -921,8 +923,11 @@ public class PPMPerpendicularityWorkflow {
                         }
                         allTacsPolylines.addAll(tacs1Polylines);
 
-                        logger.info("Created {} TACS polylines ({} TACS-1) for annotation '{}'",
-                                polylines.size(), tacs1Polylines.size(), annotationName);
+                        logger.info(
+                                "Created {} TACS polylines ({} TACS-1) for annotation '{}'",
+                                polylines.size(),
+                                tacs1Polylines.size(),
+                                annotationName);
 
                         // Display results
                         final JsonObject finalResult = annResult.json;
@@ -941,13 +946,11 @@ public class PPMPerpendicularityWorkflow {
                                     for (int my = 0; my < maskUIH; my++) {
                                         for (int mx = 0; mx < maskUIW; mx++) {
                                             int val = maskBytesForUI[my * maskUIW + mx] & 0xFF;
-                                            pw.setArgb(mx, my,
-                                                    0xFF000000 | (val << 16) | (val << 8) | val);
+                                            pw.setArgb(mx, my, 0xFF000000 | (val << 16) | (val << 8) | val);
                                         }
                                     }
                                 }
-                                resultPanel.addResult(
-                                        finalResult, finalName, idx, total, maskFXImage);
+                                resultPanel.addResult(finalResult, finalName, idx, total, maskFXImage);
                             }
                         });
                     }
@@ -1369,14 +1372,14 @@ public class PPMPerpendicularityWorkflow {
 
         List<PathObject> polylines = new ArrayList<>();
 
-        JsonObject extTacs = result.has("extended_tacs") && !result.get("extended_tacs").isJsonNull()
-                ? result.getAsJsonObject("extended_tacs")
-                : null;
+        JsonObject extTacs =
+                result.has("extended_tacs") && !result.get("extended_tacs").isJsonNull()
+                        ? result.getAsJsonObject("extended_tacs")
+                        : null;
         if (extTacs == null) return polylines;
 
         JsonArray pointsArr = extTacs.has("contour_points") ? extTacs.getAsJsonArray("contour_points") : null;
-        JsonArray classArr =
-                extTacs.has("extended_tacs_class") ? extTacs.getAsJsonArray("extended_tacs_class") : null;
+        JsonArray classArr = extTacs.has("extended_tacs_class") ? extTacs.getAsJsonArray("extended_tacs_class") : null;
         if (pointsArr == null || classArr == null || pointsArr.size() == 0) return polylines;
 
         int n = Math.min(pointsArr.size(), classArr.size());
@@ -1572,12 +1575,11 @@ public class PPMPerpendicularityWorkflow {
             service.initialize(msg -> logger.info("PPM setup: {}", msg));
         }
         if (!service.isVersionCompatible()) {
-            throw new IOException(
-                    "ppm_library " + service.getInstalledPpmVersion()
-                            + " is outdated (need " + ApposePPMService.getRequiredPpmVersion()
-                            + "+). Delete the environment at "
-                            + ApposePPMService.getEnvironmentPath()
-                            + " and restart QuPath to rebuild.");
+            throw new IOException("ppm_library " + service.getInstalledPpmVersion()
+                    + " is outdated (need " + ApposePPMService.getRequiredPpmVersion()
+                    + "+). Delete the environment at "
+                    + ApposePPMService.getEnvironmentPath()
+                    + " and restart QuPath to rebuild.");
         }
     }
 

@@ -1,9 +1,9 @@
 package qupath.ext.ppm.analysis;
 
+import java.util.function.Consumer;
 import javafx.animation.PauseTransition;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import java.util.function.Consumer;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
@@ -181,8 +181,8 @@ public class PPMHueRangePanel extends VBox {
         // Show/hide overlay checkbox
         showOverlayBox = new CheckBox("Show overlay");
         showOverlayBox.setSelected(true);
-        showOverlayBox.setTooltip(new Tooltip("Toggle the hue range overlay on/off.\n"
-                + "Uncheck to temporarily hide the overlay."));
+        showOverlayBox.setTooltip(
+                new Tooltip("Toggle the hue range overlay on/off.\n" + "Uncheck to temporarily hide the overlay."));
         showOverlayBox.selectedProperty().addListener((obs, oldV, newV) -> {
             if (onVisibilityChanged != null) onVisibilityChanged.accept(newV);
         });

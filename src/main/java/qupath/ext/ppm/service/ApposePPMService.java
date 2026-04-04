@@ -226,7 +226,9 @@ public class ApposePPMService {
                             "ppm_library {} is older than required {}. Auto-upgrading...",
                             ppmVersion,
                             REQUIRED_PPM_VERSION);
-                    report(statusCallback, "Upgrading ppm_library (" + ppmVersion + " -> " + REQUIRED_PPM_VERSION + "+)...");
+                    report(
+                            statusCallback,
+                            "Upgrading ppm_library (" + ppmVersion + " -> " + REQUIRED_PPM_VERSION + "+)...");
 
                     // Shut down old service before upgrading
                     if (pythonService != null) {
@@ -279,9 +281,12 @@ public class ApposePPMService {
                 initialized = true;
                 initError = versionCompatible ? null : initError;
                 registerShutdownHook();
-                report(statusCallback, versionCompatible
-                        ? "Setup complete! (ppm_library " + ppmVersion + ")"
-                        : "WARNING: ppm_library " + ppmVersion + " is outdated (need " + REQUIRED_PPM_VERSION + "+)");
+                report(
+                        statusCallback,
+                        versionCompatible
+                                ? "Setup complete! (ppm_library " + ppmVersion + ")"
+                                : "WARNING: ppm_library " + ppmVersion + " is outdated (need " + REQUIRED_PPM_VERSION
+                                        + "+)");
                 logger.info("PPM Appose Python service initialized");
 
             } finally {
@@ -705,8 +710,7 @@ public class ApposePPMService {
      * Returns true if {@code installed} is >= {@code required}.
      */
     static boolean isVersionSufficient(String installed, String required) {
-        if (installed == null || installed.isEmpty()
-                || "unknown".equals(installed) || "null".equals(installed)) {
+        if (installed == null || installed.isEmpty() || "unknown".equals(installed) || "null".equals(installed)) {
             return false;
         }
         try {

@@ -373,7 +373,8 @@ public class PPMAngleSelectionController {
 
             // Check background settings
             BackgroundSettingsReader.BackgroundSettings backgroundSettings =
-                    BackgroundSettingsReader.findBackgroundSettings(backgroundFolder, modality, objective, detector, null);
+                    BackgroundSettingsReader.findBackgroundSettings(
+                            backgroundFolder, modality, objective, detector, null);
 
             if (backgroundSettings == null) {
                 warningArea
@@ -505,7 +506,8 @@ public class PPMAngleSelectionController {
             }
 
             BackgroundSettingsReader.BackgroundSettings backgroundSettings =
-                    BackgroundSettingsReader.findBackgroundSettings(backgroundFolder, modality, objective, detector, null);
+                    BackgroundSettingsReader.findBackgroundSettings(
+                            backgroundFolder, modality, objective, detector, null);
 
             if (backgroundSettings == null) {
                 logger.debug(
@@ -996,7 +998,8 @@ public class PPMAngleSelectionController {
 
             // Check if background settings/images exist for this hardware combination
             BackgroundSettingsReader.BackgroundSettings backgroundSettings =
-                    BackgroundSettingsReader.findBackgroundSettings(backgroundFolder, modality, objective, detector, null);
+                    BackgroundSettingsReader.findBackgroundSettings(
+                            backgroundFolder, modality, objective, detector, null);
 
             if (backgroundSettings == null) {
                 return createBackgroundWarning(
