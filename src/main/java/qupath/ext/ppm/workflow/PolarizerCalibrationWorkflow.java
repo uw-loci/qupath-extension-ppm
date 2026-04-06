@@ -424,6 +424,9 @@ public class PolarizerCalibrationWorkflow {
 
             final String displayResults = resultsSection;
 
+            // Parse the offset value from the report for Write to YAML
+            final String parsedOffset = parseOffsetFromReport(reportContent);
+
             // Close progress dialog and show success (on FX thread)
             Platform.runLater(() -> {
                 progressDialog.close();
@@ -460,12 +463,20 @@ public class PolarizerCalibrationWorkflow {
                 alert.getDialogPane().setPrefWidth(700);
                 alert.getDialogPane().setPrefHeight(500);
 
+                ButtonType writeYamlBtn = new ButtonType("Write to YAML");
                 ButtonType openFolderBtn = new ButtonType("Open Folder");
                 ButtonType closeBtn = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
-                alert.getButtonTypes().setAll(openFolderBtn, closeBtn);
+                alert.getButtonTypes().setAll(writeYamlBtn, openFolderBtn, closeBtn);
+
+                // Disable Write to YAML if offset couldn't be parsed
+                if (parsedOffset == null) {
+                    alert.getDialogPane().lookupButton(writeYamlBtn).setDisable(true);
+                }
 
                 Optional<ButtonType> result = alert.showAndWait();
-                if (result.isPresent() && result.get() == openFolderBtn) {
+                if (result.isPresent() && result.get() == writeYamlBtn) {
+                    writeOffsetToYaml(parsedOffset);
+                } else if (result.isPresent() && result.get() == openFolderBtn) {
                     try {
                         Path reportFilePath = Paths.get(reportPath);
                         Path parentDir = reportFilePath.getParent();
@@ -496,6 +507,100 @@ public class PolarizerCalibrationWorkflow {
             });
         }
         // Note: Don't disconnect - we're using the shared MicroscopeController connection
+    }
+
+    /**
+     * Parse the ppm_pizstage_offset value from the calibration report text.
+     *
+     * @param reportContent Full text of the calibration report
+     * @return The offset value as a string, or null if not found
+     */
+    private static String parseOffsetFromReport(String reportContent) {
+        if (reportContent == null || reportContent.isEmpty()) {
+            return null;
+        }
+        // Look for "ppm_pizstage_offset: <value>" in the report
+        String marker = "ppm_pizstage_offset:";
+        int idx = reportContent.indexOf(marker);
+        if (idx < 0) {
+            logger.warn("Could not find ppm_pizstage_offset in calibration report");
+            return null;
+        }
+        String afterMarker = reportContent.substring(idx + marker.length()).trim();
+        // Take everything up to the next whitespace or end of line
+        String[] parts = afterMarker.split("\\s+", 2);
+        if (parts.length > 0 && !parts[0].isEmpty()) {
+            logger.info("Parsed ppm_pizstage_offset from report: {}", parts[0]);
+            return parts[0];
+        }
+        return null;
+    }
+
+    /**
+     * Write the calibrated offset to the microscope config YAML file.
+     *
+     * @param offsetValue The offset value to write
+     */
+    private static void writeOffsetToYaml(String offsetValue) {
+        if (offsetValue == null) {
+            Dialogs.showErrorMessage("Write Failed", "No offset value available.");
+            return;
+        }
+
+        String yamlPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        if (yamlPath == null || yamlPath.isEmpty()) {
+            Dialogs.showErrorMessage("Write Failed", "No microscope config file set in QPSC Preferences.");
+            return;
+        }
+
+        Path configPath = Paths.get(yamlPath);
+        if (!Files.exists(configPath)) {
+            Dialogs.showErrorMessage("Write Failed", "Config file not found: " + yamlPath);
+            return;
+        }
+
+        try {
+            // Read, find and replace the ppm_pizstage_offset line
+            java.util.List<String> lines = Files.readAllLines(configPath);
+            boolean found = false;
+            for (int i = 0; i < lines.size(); i++) {
+                String line = lines.get(i);
+                if (line.trim().startsWith("ppm_pizstage_offset")) {
+                    lines.set(i, "ppm_pizstage_offset : " + offsetValue);
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                // Add it after the first non-comment, non-empty line
+                for (int i = 0; i < lines.size(); i++) {
+                    String line = lines.get(i).trim();
+                    if (!line.isEmpty() && !line.startsWith("#")) {
+                        lines.add(i + 1, "ppm_pizstage_offset : " + offsetValue);
+                        found = true;
+                        break;
+                    }
+                }
+            }
+
+            Files.write(configPath, lines);
+            logger.info("Wrote ppm_pizstage_offset={} to {}", offsetValue, yamlPath);
+
+            // Reload config so the change takes effect immediately
+            try {
+                MicroscopeConfigManager.getInstance(yamlPath).reload(yamlPath);
+            } catch (Exception e) {
+                logger.warn("Could not reload config after writing offset: {}", e.getMessage());
+            }
+
+            Dialogs.showInfoNotification(
+                    "Offset Written", "ppm_pizstage_offset set to " + offsetValue + " in\n" + configPath.getFileName());
+
+        } catch (IOException e) {
+            logger.error("Failed to write offset to YAML", e);
+            Dialogs.showErrorMessage("Write Failed", "Could not write to config file: " + e.getMessage());
+        }
     }
 
     /**
