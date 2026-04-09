@@ -53,6 +53,17 @@ public class ApposePPMService {
             "ppm-library @ https://github.com/uw-loci/" + "ppm_library/archive/refs/heads/main.tar.gz";
 
     /**
+     * pip install URL for microscope-imageprocessing from GitHub.
+     * Required transitive dependency of ppm_library (>= 1.3.2). It is not
+     * published to PyPI, so we install it explicitly from the GitHub tarball
+     * before ppm_library. Must be installed with --no-deps for the same reason
+     * as ppm_library: its Python deps are already satisfied by the pixi env.
+     */
+    private static final String MICROSCOPE_IMAGEPROCESSING_PIP_URL =
+            "microscope-imageprocessing @ https://github.com/uw-loci/"
+                    + "microscope_imageprocessing/archive/refs/heads/main.tar.gz";
+
+    /**
      * Minimum required ppm-library version for this extension version.
      * <p>IMPORTANT: Update this constant whenever ppm_library changes
      * affect the extension (new parameters, API changes, bug fixes).
@@ -444,7 +455,10 @@ public class ApposePPMService {
     // ==================== Internal Helpers ====================
 
     /**
-     * Installs pixi dependencies and ppm-library via pip.
+     * Installs pixi dependencies, then the Python packages that are not on PyPI
+     * (microscope_imageprocessing and ppm_library) via pip. Order matters:
+     * microscope_imageprocessing must be installed first because ppm_library
+     * imports it at module load time.
      */
     private void installPPMLibrary(Consumer<String> statusCallback) throws IOException {
         Path envBase = Path.of(environment.base());
@@ -462,9 +476,38 @@ public class ApposePPMService {
         report(statusCallback, "Installing Python dependencies (this may take several minutes on first run)...");
         runPixiCommand(pixi, envBase, manifestPath, "install");
 
-        // Install ppm-library via "pixi run pip install ..."
-        logger.info("Installing ppm-library via pixi run pip...");
-        report(statusCallback, "Installing ppm-library package...");
+        // ppm_library >= 1.3.2 imports microscope_imageprocessing at module
+        // load time, so it must be installed first. Neither package is on
+        // PyPI, so both are pulled directly from GitHub tarballs.
+        pipInstallFromUrl(
+                pixi,
+                envBase,
+                manifestPath,
+                "microscope-imageprocessing",
+                MICROSCOPE_IMAGEPROCESSING_PIP_URL,
+                statusCallback);
+
+        pipInstallFromUrl(
+                pixi, envBase, manifestPath, "ppm-library", PPM_LIBRARY_PIP_URL, statusCallback);
+    }
+
+    /**
+     * Runs {@code pixi run pip install --upgrade --no-deps <url>} for a single
+     * package and streams the output to the logger. {@code --no-deps} is used
+     * because the Python dependencies of these packages are already satisfied
+     * by the pixi environment; letting pip re-resolve them would fight with
+     * the conda-managed versions.
+     */
+    private void pipInstallFromUrl(
+            Path pixi,
+            Path envBase,
+            Path manifestPath,
+            String packageLabel,
+            String packageUrl,
+            Consumer<String> statusCallback)
+            throws IOException {
+        logger.info("Installing {} via pixi run pip...", packageLabel);
+        report(statusCallback, "Installing " + packageLabel + " package...");
 
         java.util.List<String> command = java.util.List.of(
                 pixi.toString(),
@@ -475,7 +518,7 @@ public class ApposePPMService {
                 "install",
                 "--upgrade",
                 "--no-deps",
-                PPM_LIBRARY_PIP_URL);
+                packageUrl);
 
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(envBase.toFile());
@@ -497,13 +540,14 @@ public class ApposePPMService {
             exitCode = process.waitFor();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IOException("pip install interrupted", e);
+            throw new IOException("pip install " + packageLabel + " interrupted", e);
         }
 
         if (exitCode != 0) {
-            throw new IOException("pip install ppm-library failed (exit code " + exitCode + "):\n" + output);
+            throw new IOException(
+                    "pip install " + packageLabel + " failed (exit code " + exitCode + "):\n" + output);
         }
-        logger.info("ppm-library installed successfully");
+        logger.info("{} installed successfully", packageLabel);
     }
 
     /**
