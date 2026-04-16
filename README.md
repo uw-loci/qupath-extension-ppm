@@ -9,11 +9,13 @@
 
 ## Overview
 
-**qupath-extension-ppm** is a modality plugin for [QuPath](https://qupath.github.io/) and [QPSC](https://github.com/uw-loci/qupath-extension-qpsc) that provides calibration and analysis workflows for **Polychromatic Polarization Microscopy (PPM)**.
+**qupath-extension-ppm** is an **analysis extension** for [QuPath](https://qupath.github.io/) that provides image analysis and processing workflows for **Polychromatic Polarization Microscopy (PPM)**.
 
 PPM imaging captures multiple polarizer rotation angles per field of view, producing color-encoded images where hue represents fiber orientation. This enables quantitative analysis of birefringent structures such as collagen fiber orientation, organization, and alignment relative to tissue boundaries.
 
-This extension registers a `PPMModalityHandler` with QPSC's modality plugin system, adding PPM-specific menus, acquisition parameters, and analysis tools to QuPath.
+This extension adds analysis menus under **Extensions > PPM Analysis** in QuPath. Analysis menus are always available, even on workstations without microscope hardware -- making it safe to install for offline image analysis.
+
+> **Hardware/acquisition workflows** (rotation control, calibration, angle selection) are provided by [qupath-extension-qpsc](https://github.com/uw-loci/qupath-extension-qpsc) in its `modality/ppm/` package. This extension does NOT register a modality handler or contain any hardware code.
 
 > **Reference:** Shribak, M. (2015). "Polychromatic polarization microscope: bringing colors to a colorless world." *Scientific Reports*, 5, 17340. [DOI: 10.1038/srep17340](https://doi.org/10.1038/srep17340)
 
@@ -21,7 +23,7 @@ This extension registers a `PPMModalityHandler` with QPSC's modality plugin syst
 
 | Repository | Description |
 |------------|-------------|
-| [qupath-extension-qpsc](https://github.com/uw-loci/qupath-extension-qpsc) | Main QPSC extension -- provides ModalityHandler infrastructure, microscope communication, and coordinate transformations |
+| [qupath-extension-qpsc](https://github.com/uw-loci/qupath-extension-qpsc) | Main QPSC extension -- provides PPM hardware/acquisition (rotation, calibration, angle selection) plus ModalityHandler infrastructure, microscope communication, and coordinate transformations |
 | [ppm_library](https://github.com/uw-loci/ppm_library) | Python image processing library for PPM -- provides radial calibration, birefringence computation, background correction, and circular statistics used by this extension's workflows |
 | [QPSC](https://github.com/uw-loci/QPSC) | System overview and installation guide for the complete QPSC platform |
 
@@ -42,7 +44,9 @@ This extension registers a `PPMModalityHandler` with QPSC's modality plugin syst
 
 ## Features
 
-### Calibration Workflows
+### Calibration Workflows (in QPSC, require microscope)
+
+> These workflows are provided by [qupath-extension-qpsc](https://github.com/uw-loci/qupath-extension-qpsc) and appear under the **Scope > PPM** menu when a microscope is configured. They are documented here for the complete PPM workflow reference.
 
 | Workflow | Description | Guide |
 |----------|-------------|-------|
@@ -51,7 +55,7 @@ This extension registers a `PPMModalityHandler` with QPSC's modality plugin syst
 | **PPM Birefringence Optimization** | Find the optimal polarizer angle for maximum birefringence signal contrast by systematically testing paired angles | [docs](documentation/ppm-birefringence-optimization.md) |
 | **PPM Reference Slide (Sunburst)** | Create a hue-to-angle calibration from a reference slide with radial spoke pattern via linear regression | [docs](documentation/ppm-reference-slide.md) |
 
-### Analysis Workflows
+### Analysis Workflows (in this extension, no microscope needed)
 
 | Workflow | Description | Guide |
 |----------|-------------|-------|
@@ -61,7 +65,9 @@ This extension registers a `PPMModalityHandler` with QPSC's modality plugin syst
 | **Batch PPM Analysis** | Run PPM analysis across all annotations in the current project; exports results as CSV with circular statistics | [docs](documentation/batch-ppm-analysis.md) |
 | **Back-Propagate Annotations** | Transfer annotations from sub-images back to parent/base images using alignment transforms and XY offsets | [docs](documentation/back-propagate-annotations.md) |
 
-### Acquisition Integration
+### Acquisition Integration (provided by QPSC)
+
+> These features are part of QPSC's PPM hardware handler (`modality/ppm/PPMModalityHandler`), not this extension.
 
 - Automatic PPM angle sequence loading from microscope configuration
 - Decimal precision exposure times (e.g., 1.2ms, 500.0ms, 0.8ms)
@@ -99,7 +105,7 @@ Once calibrated, the analysis workflows are available:
 ## Requirements
 
 - **QuPath** 0.6.0-rc4 or later
-- **[qupath-extension-qpsc](https://github.com/uw-loci/qupath-extension-qpsc)** 0.3.3 or later (provides ModalityHandler infrastructure)
+- **[qupath-extension-qpsc](https://github.com/uw-loci/qupath-extension-qpsc)** 0.4.2 or later (provides ImageMetadataManager, DocumentationHelper, and shared utilities)
 - **[ppm_library](https://github.com/uw-loci/ppm_library)** (Python, called via subprocess for calibration and analysis computations)
 
 ---
@@ -110,7 +116,7 @@ Once calibrated, the analysis workflows are available:
 2. Copy the JAR to your QuPath `extensions/` directory
 3. Restart QuPath
 
-The PPM extension will automatically register with QPSC and add a **PPM** submenu under the QPSC extensions menu.
+The PPM extension will add a **PPM Analysis** submenu under QuPath's **Extensions** menu. No microscope connection is required for analysis workflows.
 
 ---
 
@@ -136,23 +142,23 @@ The output JAR is at `build/libs/qupath-extension-ppm-0.1.3-all.jar`.
 
 | Package | Description |
 |---------|-------------|
-| `qupath.ext.ppm` | Extension entry point (`SetupPPM`) and preferences (`PPMPreferences`) |
-| `qupath.ext.ppm.handler` | `PPMModalityHandler`, `RotationManager`, `RotationStrategy` |
-| `qupath.ext.ppm.ui` | Dialogs and UI components (angle selection, calibration, bounding box) |
-| `qupath.ext.ppm.workflow` | Calibration and optimization acquisition workflows |
-| `qupath.ext.ppm.analysis` | Analysis workflows, overlay rendering, batch processing, result export |
+| `qupath.ext.ppm` | Extension entry point (`SetupPPM`) and analysis preferences (`PPMPreferences`) |
+| `qupath.ext.ppm.analysis` | Analysis workflows, overlay rendering, batch processing, result export, PPM image set discovery |
+| `qupath.ext.ppm.service` | `ApposePPMService` -- Python/Appose integration for ppm_library |
+| `qupath.ext.ppm.ui` | `SetupEnvironmentDialog`, `PythonConsoleWindow` -- analysis utility UI |
+
+> **Note:** Hardware packages (`handler/`, `workflow/`) were moved to QPSC's `modality/ppm/` package in v0.4.2 (2026-04-16). PPM hardware preferences (angles, exposures, overrides, calibration path) are in QPSC's `PPMPreferences`. This extension's `PPMPreferences` holds only analysis thresholds (birefringence, histogram bins, saturation, TACS).
 
 ---
 
 ## How It Works
 
-### Modality Plugin System
+### Architecture: Hardware vs Analysis Split
 
-QPSC uses a registry-based plugin architecture. During QuPath startup, this extension:
+PPM functionality is split across two extensions:
 
-1. Registers `PPMModalityHandler` with `ModalityRegistry` using prefix `"ppm"`
-2. Any QPSC modality name starting with `"ppm"` (e.g., `ppm_20x`, `ppm_40x`) routes to this handler
-3. The handler contributes menu items, acquisition parameters, and UI components
+- **QPSC** (`modality/ppm/`): Owns all hardware -- `PPMModalityHandler` (registered with `ModalityRegistry`), rotation control (`RotationManager`), calibration workflows, angle selection dialog, exposure management, and hardware preferences. These appear under **Scope > PPM** when a microscope is configured.
+- **This extension**: Owns all analysis -- hue range filtering, polarity plots, perpendicularity analysis, batch processing, and Appose/Python integration. These appear under **Extensions > PPM Analysis** and are always available.
 
 ### PPM Acquisition Sequence
 
