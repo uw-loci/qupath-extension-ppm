@@ -46,7 +46,7 @@ import qupath.ext.ppm.PPMPreferences;
 import qupath.ext.ppm.service.ApposePPMService;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
-import qupath.ext.qpsc.utilities.ImageMetadataManager.PPMAnalysisSet;
+import qupath.ext.ppm.analysis.PPMImageSetDiscovery.PPMAnalysisSet;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.analysis.images.ContourTracing;
 import qupath.lib.classifiers.pixel.PixelClassifier;
@@ -202,7 +202,7 @@ public class PPMPerpendicularityWorkflow {
 
             if (isBiref) {
                 // Try to identify an angle image for the user
-                PPMAnalysisSet analysisSetCheck = ImageMetadataManager.findPPMAnalysisSet(currentEntry, project);
+                PPMAnalysisSet analysisSetCheck = PPMImageSetDiscovery.findPPMAnalysisSet(currentEntry, project);
                 String angleHint = "";
                 if (analysisSetCheck != null && !analysisSetCheck.angleImages.isEmpty()) {
                     angleHint = "\n\nAngle images in this set:\n";
@@ -315,7 +315,7 @@ public class PPMPerpendicularityWorkflow {
         // Image info header
         String colorImageName = currentEntry != null ? currentEntry.getImageName() : "unknown";
         PPMAnalysisSet previewSet =
-                currentEntry != null ? ImageMetadataManager.findPPMAnalysisSet(currentEntry, project) : null;
+                currentEntry != null ? PPMImageSetDiscovery.findPPMAnalysisSet(currentEntry, project) : null;
         Label imageInfoLabel = new Label("Color image: " + colorImageName
                 + (previewSet != null && previewSet.hasBirefImage()
                         ? "\nBirefringence: " + previewSet.birefImage.getImageName()
@@ -766,7 +766,7 @@ public class PPMPerpendicularityWorkflow {
             // Find analysis set for biref (not needed if using classifier)
             PPMAnalysisSet analysisSet = null;
             if (!useClassifier && currentEntry != null) {
-                analysisSet = ImageMetadataManager.findPPMAnalysisSet(currentEntry, project);
+                analysisSet = PPMImageSetDiscovery.findPPMAnalysisSet(currentEntry, project);
             }
 
             // Load pixel classifier if selected (must be done on FX thread / before background)
@@ -1586,7 +1586,7 @@ public class PPMPerpendicularityWorkflow {
     private static String findCalibrationPath(ProjectImageEntry<BufferedImage> entry, Project<BufferedImage> project) {
         PPMAnalysisSet analysisSet = null;
         if (entry != null && project != null) {
-            analysisSet = ImageMetadataManager.findPPMAnalysisSet(entry, project);
+            analysisSet = PPMImageSetDiscovery.findPPMAnalysisSet(entry, project);
         }
 
         String calibrationPath = null;

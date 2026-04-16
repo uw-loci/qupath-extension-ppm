@@ -17,7 +17,7 @@ import qupath.ext.ppm.PPMPreferences;
 import qupath.ext.ppm.service.ApposePPMService;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
-import qupath.ext.qpsc.utilities.ImageMetadataManager.PPMAnalysisSet;
+import qupath.ext.ppm.analysis.PPMImageSetDiscovery.PPMAnalysisSet;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.scripting.QPEx;
@@ -117,7 +117,7 @@ public class PPMPolarityPlotWorkflow {
 
             if (isBiref) {
                 PPMAnalysisSet analysisSetCheck =
-                        project != null ? ImageMetadataManager.findPPMAnalysisSet(currentEntry, project) : null;
+                        project != null ? PPMImageSetDiscovery.findPPMAnalysisSet(currentEntry, project) : null;
                 String angleHint = "";
                 if (analysisSetCheck != null && !analysisSetCheck.angleImages.isEmpty()) {
                     angleHint = "\n\nAngle images in this set:\n";
@@ -144,7 +144,7 @@ public class PPMPolarityPlotWorkflow {
 
         PPMAnalysisSet analysisSet = null;
         if (currentEntry != null && project != null) {
-            analysisSet = ImageMetadataManager.findPPMAnalysisSet(currentEntry, project);
+            analysisSet = PPMImageSetDiscovery.findPPMAnalysisSet(currentEntry, project);
         }
 
         String calibrationPath = null;

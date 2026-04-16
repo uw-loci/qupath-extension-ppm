@@ -30,7 +30,7 @@ import qupath.ext.ppm.PPMPreferences;
 import qupath.ext.ppm.service.ApposePPMService;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
-import qupath.ext.qpsc.utilities.ImageMetadataManager.PPMAnalysisSet;
+import qupath.ext.ppm.analysis.PPMImageSetDiscovery.PPMAnalysisSet;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.scripting.QPEx;
@@ -428,7 +428,7 @@ public class PPMBatchAnalysisWorkflow {
                     PixelCalibration pixelCal = colorServer.getPixelCalibration();
                     double pixelSizeUm = pixelCal.hasPixelSizeMicrons() ? pixelCal.getAveragedPixelSizeMicrons() : 1.0;
 
-                    PPMAnalysisSet analysisSet = ImageMetadataManager.findPPMAnalysisSet(colorEntry, project);
+                    PPMAnalysisSet analysisSet = PPMImageSetDiscovery.findPPMAnalysisSet(colorEntry, project);
 
                     Collection<PathObject> annotations =
                             imageData.getHierarchy().getAnnotationObjects();

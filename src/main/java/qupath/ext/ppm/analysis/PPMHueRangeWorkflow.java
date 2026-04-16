@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.ppm.PPMPreferences;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
-import qupath.ext.qpsc.utilities.ImageMetadataManager.PPMAnalysisSet;
+import qupath.ext.ppm.analysis.PPMImageSetDiscovery.PPMAnalysisSet;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.scripting.QPEx;
@@ -93,7 +93,7 @@ public class PPMHueRangeWorkflow {
 
         PPMAnalysisSet analysisSet = null;
         if (currentEntry != null && project != null) {
-            analysisSet = ImageMetadataManager.findPPMAnalysisSet(currentEntry, project);
+            analysisSet = PPMImageSetDiscovery.findPPMAnalysisSet(currentEntry, project);
         }
 
         String calibrationPath = null;
