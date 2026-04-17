@@ -487,8 +487,7 @@ public class ApposePPMService {
                 MICROSCOPE_IMAGEPROCESSING_PIP_URL,
                 statusCallback);
 
-        pipInstallFromUrl(
-                pixi, envBase, manifestPath, "ppm-library", PPM_LIBRARY_PIP_URL, statusCallback);
+        pipInstallFromUrl(pixi, envBase, manifestPath, "ppm-library", PPM_LIBRARY_PIP_URL, statusCallback);
     }
 
     /**
@@ -544,8 +543,7 @@ public class ApposePPMService {
         }
 
         if (exitCode != 0) {
-            throw new IOException(
-                    "pip install " + packageLabel + " failed (exit code " + exitCode + "):\n" + output);
+            throw new IOException("pip install " + packageLabel + " failed (exit code " + exitCode + "):\n" + output);
         }
         logger.info("{} installed successfully", packageLabel);
     }

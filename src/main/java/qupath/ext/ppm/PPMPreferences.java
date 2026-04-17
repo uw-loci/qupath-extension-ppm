@@ -24,8 +24,7 @@ public class PPMPreferences {
     private static final StringProperty birefringenceThreshold =
             PathPrefs.createPersistentPreference("PPMBirefringenceThreshold", "100.0");
 
-    private static final StringProperty histogramBins =
-            PathPrefs.createPersistentPreference("PPMHistogramBins", "18");
+    private static final StringProperty histogramBins = PathPrefs.createPersistentPreference("PPMHistogramBins", "18");
 
     private static final StringProperty saturationThreshold =
             PathPrefs.createPersistentPreference("PPMSaturationThreshold", "0.2");
@@ -33,8 +32,7 @@ public class PPMPreferences {
     private static final StringProperty valueThreshold =
             PathPrefs.createPersistentPreference("PPMValueThreshold", "0.2");
 
-    private static final StringProperty dilationUm =
-            PathPrefs.createPersistentPreference("PPMDilationUm", "50.0");
+    private static final StringProperty dilationUm = PathPrefs.createPersistentPreference("PPMDilationUm", "50.0");
 
     private static final StringProperty tacsThresholdDeg =
             PathPrefs.createPersistentPreference("PPMTacsThresholdDeg", "30.0");

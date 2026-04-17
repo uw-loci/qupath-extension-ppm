@@ -1,6 +1,6 @@
 # QuPath PPM (Polychromatic Polarization Microscopy) Extension
 
-[![QuPath Version](https://img.shields.io/badge/qupath-0.6.0+-blue)](https://qupath.github.io/)
+[![QuPath Version](https://img.shields.io/badge/qupath-0.7.0+-blue)](https://qupath.github.io/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](#license)
 [![Status](https://img.shields.io/badge/status-pre--release-orange)](#)
 
@@ -104,15 +104,15 @@ Once calibrated, the analysis workflows are available:
 
 ## Requirements
 
-- **QuPath** 0.6.0-rc4 or later
-- **[qupath-extension-qpsc](https://github.com/uw-loci/qupath-extension-qpsc)** 0.4.2 or later (provides ImageMetadataManager, DocumentationHelper, and shared utilities)
+- **QuPath** 0.7.0 or later (Java 25+)
+- **[qupath-extension-qpsc](https://github.com/uw-loci/qupath-extension-qpsc)** 0.5.0 or later (provides ImageMetadataManager, DocumentationHelper, and shared utilities)
 - **[ppm_library](https://github.com/uw-loci/ppm_library)** (Python, called via subprocess for calibration and analysis computations)
 
 ---
 
 ## Installation
 
-1. Download `qupath-extension-ppm-0.1.3-all.jar` from the [latest release](https://github.com/uw-loci/qupath-extension-ppm/releases)
+1. Download `qupath-extension-ppm-0.2.0-all.jar` from the [latest release](https://github.com/uw-loci/qupath-extension-ppm/releases)
 2. Copy the JAR to your QuPath `extensions/` directory
 3. Restart QuPath
 
@@ -122,7 +122,7 @@ The PPM extension will add a **PPM Analysis** submenu under QuPath's **Extension
 
 ## Building from Source
 
-Requires Java 21+ and Gradle.
+Requires Java 25+ and Gradle.
 
 ```bash
 # QPSC must be published to local Maven first:
@@ -134,7 +134,7 @@ cd qupath-extension-ppm
 ./gradlew shadowJar
 ```
 
-The output JAR is at `build/libs/qupath-extension-ppm-0.1.3-all.jar`.
+The output JAR is at `build/libs/qupath-extension-ppm-0.2.0-all.jar`.
 
 ---
 

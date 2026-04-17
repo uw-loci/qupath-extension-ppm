@@ -35,10 +35,9 @@ public class SetupPPM implements QuPathExtension, GitHubProject {
     private static final Logger logger = LoggerFactory.getLogger(SetupPPM.class);
 
     private static final String EXTENSION_NAME = "PPM Analysis Extension";
-    private static final String EXTENSION_DESCRIPTION =
-            "Polarized light microscopy (PPM) image analysis for QuPath. "
-                    + "Provides hue range filtering, polarity plots, surface perpendicularity, "
-                    + "and batch analysis tools for PPM images.";
+    private static final String EXTENSION_DESCRIPTION = "Polarized light microscopy (PPM) image analysis for QuPath. "
+            + "Provides hue range filtering, polarity plots, surface perpendicularity, "
+            + "and batch analysis tools for PPM images.";
     private static final Version EXTENSION_QUPATH_VERSION = Version.parse("v0.6.0");
     private static final GitHubRepo EXTENSION_REPOSITORY =
             GitHubRepo.create(EXTENSION_NAME, "uw-loci", "qupath-extension-ppm");
@@ -72,15 +71,18 @@ public class SetupPPM implements QuPathExtension, GitHubProject {
         Menu extensionsMenu = qupath.getMenu("Extensions", true);
         Menu ppmMenu = new Menu("PPM Analysis");
 
-        ppmMenu.getItems().addAll(
-                createMenuItem("PPM Hue Range Filter...", PPMHueRangeWorkflow::run),
-                createMenuItem("PPM Polarity Plot...", PPMPolarityPlotWorkflow::run),
-                createMenuItem("Surface Perpendicularity...", PPMPerpendicularityWorkflow::run),
-                createMenuItem("Batch PPM Analysis...", PPMBatchAnalysisWorkflow::run),
-                createMenuItem("Back-Propagate Annotations...", PPMBackPropagationWorkflow::run),
-                new SeparatorMenuItem(),
-                createMenuItem("PPM Analysis Environment...", SetupPPM::showManageEnvironmentDialog),
-                createMenuItem("Python Console...", () -> PythonConsoleWindow.getInstance().show()));
+        ppmMenu.getItems()
+                .addAll(
+                        createMenuItem("PPM Hue Range Filter...", PPMHueRangeWorkflow::run),
+                        createMenuItem("PPM Polarity Plot...", PPMPolarityPlotWorkflow::run),
+                        createMenuItem("Surface Perpendicularity...", PPMPerpendicularityWorkflow::run),
+                        createMenuItem("Batch PPM Analysis...", PPMBatchAnalysisWorkflow::run),
+                        createMenuItem("Back-Propagate Annotations...", PPMBackPropagationWorkflow::run),
+                        new SeparatorMenuItem(),
+                        createMenuItem("PPM Analysis Environment...", SetupPPM::showManageEnvironmentDialog),
+                        createMenuItem(
+                                "Python Console...",
+                                () -> PythonConsoleWindow.getInstance().show()));
 
         extensionsMenu.getItems().add(ppmMenu);
 

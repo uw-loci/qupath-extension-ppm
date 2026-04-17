@@ -6,14 +6,14 @@ plugins {
     // Code formatting (like Black for Python)
     id("com.diffplug.spotless") version "7.0.2"
     // Static bug detection
-    id("com.github.spotbugs") version "6.1.2"
+    id("com.github.spotbugs") version "6.5.0"
 }
 
 // Configure your extension here
 qupathExtension {
     name = "qupath-extension-ppm"
     group = "io.github.uw-loci"
-    version = "0.1.3"
+    version = "0.2.0"
     description = "Polarized light microscopy (PPM) modality extension for QuPath/QPSC"
     automaticModule = "io.github.uw.loci.extension.ppm"
 }
@@ -96,7 +96,7 @@ tasks.test {
 spotless {
     java {
         target("src/**/*.java")
-        palantirJavaFormat("2.50.0")
+        palantirJavaFormat("2.90.0")
         trimTrailingWhitespace()
         endWithNewline()
     }
