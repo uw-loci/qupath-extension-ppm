@@ -326,7 +326,9 @@ public class PPMPerpendicularityWorkflow {
         row++;
 
         // Annotation class selector
-        grid.add(new Label("Boundary annotation class:"), 0, row);
+        Label boundaryClassLabel = new Label("Boundary annotation class:");
+        boundaryClassLabel.setTooltip(new Tooltip("Annotation class that defines the boundary for perpendicularity analysis"));
+        grid.add(boundaryClassLabel, 0, row);
         ChoiceBox<String> classChoice = new ChoiceBox<>();
         classChoice.getItems().addAll(classNames);
         classChoice.setValue(classNames.get(0));
@@ -351,7 +353,9 @@ public class PPMPerpendicularityWorkflow {
         updateCount.run();
 
         // Dilation
-        grid.add(new Label("Border zone width (um):"), 0, row);
+        Label borderZoneLabel = new Label("Border zone width (um):");
+        borderZoneLabel.setTooltip(new Tooltip("Distance from the boundary within which fibers are analyzed (1-500 um)"));
+        grid.add(borderZoneLabel, 0, row);
         Spinner<Double> dilationSpinner =
                 new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(1, 500, getDefaultDilationUm(), 5));
         dilationSpinner.setEditable(true);
@@ -366,7 +370,9 @@ public class PPMPerpendicularityWorkflow {
         row++;
 
         // Zone mode
-        grid.add(new Label("Zone mode:"), 0, row);
+        Label zoneModeLabel = new Label("Zone mode:");
+        zoneModeLabel.setTooltip(new Tooltip("Which side of the boundary to analyze (outside, inside, or both)"));
+        grid.add(zoneModeLabel, 0, row);
         ChoiceBox<String> zoneChoice = new ChoiceBox<>();
         zoneChoice.getItems().addAll("outside", "inside", "both");
         zoneChoice.setValue("outside");
@@ -382,7 +388,9 @@ public class PPMPerpendicularityWorkflow {
         row++;
 
         // TACS threshold
-        grid.add(new Label("TACS threshold (deg from normal):"), 0, row);
+        Label tacsThreshLabel = new Label("TACS threshold (deg from normal):");
+        tacsThreshLabel.setTooltip(new Tooltip("Angle cutoff for TACS classification (5-85 deg)"));
+        grid.add(tacsThreshLabel, 0, row);
         Spinner<Double> tacsSpinner =
                 new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(5, 85, getDefaultTacsThreshold(), 5));
         tacsSpinner.setEditable(true);
@@ -410,7 +418,9 @@ public class PPMPerpendicularityWorkflow {
         row++;
 
         // Minimum polyline length
-        grid.add(new Label("Min TACS segment length (px):"), 0, row);
+        Label minSegLabel = new Label("Min TACS segment length (px):");
+        minSegLabel.setTooltip(new Tooltip("Minimum contour points for a TACS polyline segment (2-500 px)"));
+        grid.add(minSegLabel, 0, row);
         Spinner<Integer> minLengthSpinner = new Spinner<>(
                 new SpinnerValueFactory.IntegerSpinnerValueFactory(2, 500, PPMPreferences.getMinPolylineLengthPx(), 5));
         minLengthSpinner.setEditable(true);
@@ -444,6 +454,7 @@ public class PPMPerpendicularityWorkflow {
         row++;
 
         Label densityLabel = new Label("Min collagen density:");
+        densityLabel.setTooltip(new Tooltip("Normalized collagen density threshold for TACS-1 classification (0.01-0.50)"));
         grid.add(densityLabel, 0, row);
         Spinner<Double> densitySpinner =
                 new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0.01, 0.5, 0.1, 0.01));
@@ -460,6 +471,7 @@ public class PPMPerpendicularityWorkflow {
         row++;
 
         Label signalLabel = new Label("Min signal threshold:");
+        signalLabel.setTooltip(new Tooltip("Normalized density below which a pixel has no collagen signal (0-0.20)"));
         grid.add(signalLabel, 0, row);
         Spinner<Double> signalSpinner =
                 new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0.0, 0.2, 0.02, 0.01));
@@ -493,7 +505,9 @@ public class PPMPerpendicularityWorkflow {
         grid.add(smoothHeader, 0, row, 3, 1);
         row++;
 
-        grid.add(new Label("Boundary smoothing (px):"), 0, row);
+        Label bndSmoothLabel = new Label("Boundary smoothing (px):");
+        bndSmoothLabel.setTooltip(new Tooltip("Gaussian sigma for smoothing the boundary contour (0-20 px)"));
+        grid.add(bndSmoothLabel, 0, row);
         Spinner<Double> boundarySigmaSpinner =
                 new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 20, 5.0, 0.5));
         boundarySigmaSpinner.setEditable(true);
@@ -507,7 +521,9 @@ public class PPMPerpendicularityWorkflow {
         grid.add(boundarySigmaSpinner, 1, row);
         row++;
 
-        grid.add(new Label("TACS contour smoothing:"), 0, row);
+        Label tacsSmoothLabel = new Label("TACS contour smoothing:");
+        tacsSmoothLabel.setTooltip(new Tooltip("Moving average window for TACS score smoothing along the boundary (1-50)"));
+        grid.add(tacsSmoothLabel, 0, row);
         Spinner<Integer> smoothWindowSpinner =
                 new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 50, 10, 1));
         smoothWindowSpinner.setEditable(true);
@@ -521,7 +537,9 @@ public class PPMPerpendicularityWorkflow {
         grid.add(smoothWindowSpinner, 1, row);
         row++;
 
-        grid.add(new Label("Min collagen area (px):"), 0, row);
+        Label minColAreaLabel = new Label("Min collagen area (px):");
+        minColAreaLabel.setTooltip(new Tooltip("Connected components smaller than this are removed (0-5000 px)"));
+        grid.add(minColAreaLabel, 0, row);
         Spinner<Integer> minAreaSpinner =
                 new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 5000, 100, 25));
         minAreaSpinner.setEditable(true);
@@ -534,7 +552,9 @@ public class PPMPerpendicularityWorkflow {
         grid.add(minAreaSpinner, 1, row);
         row++;
 
-        grid.add(new Label("Mask smoothing sigma:"), 0, row);
+        Label maskSigmaLabel = new Label("Mask smoothing sigma:");
+        maskSigmaLabel.setTooltip(new Tooltip("Gaussian sigma for smoothing the foreground mask (0-10 px)"));
+        grid.add(maskSigmaLabel, 0, row);
         Spinner<Double> maskSigmaSpinner =
                 new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 10, 2.0, 0.5));
         maskSigmaSpinner.setEditable(true);
@@ -576,6 +596,7 @@ public class PPMPerpendicularityWorkflow {
 
         // -- Threshold controls --
         Label birefLabel = new Label("Birefringence threshold:");
+        birefLabel.setTooltip(new Tooltip("Minimum birefringence intensity for collagen-positive pixels (0-65535)"));
         grid.add(birefLabel, 0, row);
         Spinner<Double> birefSpinner =
                 new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 65535, getBirefThreshold(), 100));
@@ -593,6 +614,7 @@ public class PPMPerpendicularityWorkflow {
         row++;
 
         Label satLabel = new Label("HSV saturation threshold:");
+        satLabel.setTooltip(new Tooltip("Minimum HSV saturation for meaningful orientation (0-1)"));
         grid.add(satLabel, 0, row);
         Spinner<Double> satSpinner = new Spinner<>(
                 new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 1, PPMPreferences.getSaturationThreshold(), 0.05));
@@ -608,6 +630,7 @@ public class PPMPerpendicularityWorkflow {
         row++;
 
         Label valLabel = new Label("HSV value threshold:");
+        valLabel.setTooltip(new Tooltip("Minimum HSV brightness for included pixels (0-1)"));
         grid.add(valLabel, 0, row);
         Spinner<Double> valSpinner = new Spinner<>(
                 new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 1, PPMPreferences.getValueThreshold(), 0.05));
@@ -622,6 +645,7 @@ public class PPMPerpendicularityWorkflow {
         row++;
 
         Label minIntLabel = new Label("Min pixel intensity:");
+        minIntLabel.setTooltip(new Tooltip("Minimum max(R,G,B) to exclude dark absorbing tissue (0-255)"));
         grid.add(minIntLabel, 0, row);
         Spinner<Integer> minIntensitySpinner =
                 new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 255, 100, 10));
@@ -640,6 +664,7 @@ public class PPMPerpendicularityWorkflow {
 
         // -- Pixel classifier controls --
         Label classifierLabel = new Label("Classifier:");
+        classifierLabel.setTooltip(new Tooltip("Pixel classifier or thresholder to define foreground mask"));
         grid.add(classifierLabel, 0, row);
         ChoiceBox<String> classifierChoice = new ChoiceBox<>();
         // Discover available pixel classifiers from the project

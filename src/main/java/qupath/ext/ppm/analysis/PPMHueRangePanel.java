@@ -96,10 +96,14 @@ public class PPMHueRangePanel extends VBox {
         GridPane angleGrid = new GridPane();
         angleGrid.setHgap(8);
         angleGrid.setVgap(4);
-        angleGrid.add(new Label("Low:"), 0, 0);
+        Label lowLabel = new Label("Low:");
+        lowLabel.setTooltip(new Tooltip("Lower bound of the angle range filter (0-180 deg)"));
+        angleGrid.add(lowLabel, 0, 0);
         angleGrid.add(angleLowSlider, 1, 0);
         angleGrid.add(angleLowValueLabel, 2, 0);
-        angleGrid.add(new Label("High:"), 0, 1);
+        Label highLabel = new Label("High:");
+        highLabel.setTooltip(new Tooltip("Upper bound of the angle range filter (0-180 deg)"));
+        angleGrid.add(highLabel, 0, 1);
         angleGrid.add(angleHighSlider, 1, 1);
         angleGrid.add(angleHighValueLabel, 2, 1);
 
@@ -127,10 +131,14 @@ public class PPMHueRangePanel extends VBox {
         GridPane threshGrid = new GridPane();
         threshGrid.setHgap(8);
         threshGrid.setVgap(4);
-        threshGrid.add(new Label("Saturation:"), 0, 0);
+        Label satLabel = new Label("Saturation:");
+        satLabel.setTooltip(new Tooltip("Minimum saturation threshold for valid pixels"));
+        threshGrid.add(satLabel, 0, 0);
         threshGrid.add(saturationSlider, 1, 0);
         threshGrid.add(satValueLabel, 2, 0);
-        threshGrid.add(new Label("Value:"), 0, 1);
+        Label valLabel = new Label("Value:");
+        valLabel.setTooltip(new Tooltip("Minimum brightness (value) threshold for valid pixels"));
+        threshGrid.add(valLabel, 0, 1);
         threshGrid.add(valueSlider, 1, 1);
         threshGrid.add(valValueLabel, 2, 1);
 
@@ -141,7 +149,10 @@ public class PPMHueRangePanel extends VBox {
                 + "whose color comes from dye, not birefringence.\n"
                 + "Set to 0 to disable. Default 100."));
         minIntValueLabel = new Label("100");
-        threshGrid.add(new Label("Min intensity:"), 0, 2);
+        Label minIntLabel = new Label("Min intensity:");
+        minIntLabel.setTooltip(new Tooltip("Minimum max(R,G,B) pixel intensity.\n"
+                + "Excludes dark absorbing tissue. Set to 0 to disable."));
+        threshGrid.add(minIntLabel, 0, 2);
         threshGrid.add(minIntensitySlider, 1, 2);
         threshGrid.add(minIntValueLabel, 2, 2);
 
@@ -165,9 +176,13 @@ public class PPMHueRangePanel extends VBox {
         GridPane appearGrid = new GridPane();
         appearGrid.setHgap(8);
         appearGrid.setVgap(4);
-        appearGrid.add(new Label("Color:"), 0, 0);
+        Label colorLabel = new Label("Color:");
+        colorLabel.setTooltip(new Tooltip("Color used to highlight matching pixels in the overlay"));
+        appearGrid.add(colorLabel, 0, 0);
         appearGrid.add(colorPicker, 1, 0);
-        appearGrid.add(new Label("Opacity:"), 0, 1);
+        Label opacityLabel = new Label("Opacity:");
+        opacityLabel.setTooltip(new Tooltip("Opacity of the highlight overlay (0 = transparent, 1 = opaque)"));
+        appearGrid.add(opacityLabel, 0, 1);
         appearGrid.add(opacitySlider, 1, 1);
         appearGrid.add(opacityValueLabel, 2, 1);
 
@@ -229,9 +244,15 @@ public class PPMHueRangePanel extends VBox {
         GridPane detectGrid = new GridPane();
         detectGrid.setHgap(8);
         detectGrid.setVgap(4);
-        detectGrid.add(new Label("Resolution:"), 0, 0);
+        Label resLabel = new Label("Resolution:");
+        resLabel.setTooltip(new Tooltip("Resolution level for detection creation.\n"
+                + "Higher downsamples are faster but produce coarser objects."));
+        detectGrid.add(resLabel, 0, 0);
         detectGrid.add(downsampleCombo, 1, 0);
-        detectGrid.add(new Label("Min area (um^2):"), 0, 1);
+        Label minAreaLabel = new Label("Min area (um^2):");
+        minAreaLabel.setTooltip(new Tooltip("Minimum area in um^2 for created detections.\n"
+                + "Objects smaller than this are filtered out as noise."));
+        detectGrid.add(minAreaLabel, 0, 1);
         detectGrid.add(minAreaSpinner, 1, 1);
 
         HBox detectButtons = new HBox(8, createDetectionsButton);

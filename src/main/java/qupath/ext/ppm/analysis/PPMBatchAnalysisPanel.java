@@ -156,7 +156,9 @@ public class PPMBatchAnalysisPanel extends VBox {
 
         int row = 0;
 
-        perpGrid.add(new Label("Boundary class:"), 0, row);
+        Label boundaryLabel = new Label("Boundary class:");
+        boundaryLabel.setTooltip(new Tooltip("Annotation class that defines the boundary for perpendicularity analysis"));
+        perpGrid.add(boundaryLabel, 0, row);
         boundaryClassChoice.getItems().addAll(availableClasses);
         if (!availableClasses.isEmpty()) {
             boundaryClassChoice.setValue(availableClasses.get(0));
@@ -168,7 +170,9 @@ public class PPMBatchAnalysisPanel extends VBox {
         perpGrid.add(boundaryClassChoice, 1, row);
         row++;
 
-        perpGrid.add(new Label("Dilation (um):"), 0, row);
+        Label dilationLabel = new Label("Dilation (um):");
+        dilationLabel.setTooltip(new Tooltip("Distance from the boundary within which fibers are analyzed"));
+        perpGrid.add(dilationLabel, 0, row);
         dilationSpinner = new Spinner<>(
                 new SpinnerValueFactory.DoubleSpinnerValueFactory(1, 500, PPMPreferences.getDilationUm(), 5));
         dilationSpinner.setEditable(true);
@@ -179,7 +183,9 @@ public class PPMBatchAnalysisPanel extends VBox {
         perpGrid.add(dilationSpinner, 1, row);
         row++;
 
-        perpGrid.add(new Label("Zone mode:"), 0, row);
+        Label zoneModeLabel = new Label("Zone mode:");
+        zoneModeLabel.setTooltip(new Tooltip("Which side of the boundary to analyze (outside, inside, or both)"));
+        perpGrid.add(zoneModeLabel, 0, row);
         zoneModeChoice.getItems().addAll("outside", "inside", "both");
         zoneModeChoice.setValue("outside");
         zoneModeChoice.setTooltip(new Tooltip("Which side of the boundary to analyze:\n"
@@ -191,7 +197,9 @@ public class PPMBatchAnalysisPanel extends VBox {
         perpGrid.add(zoneModeChoice, 1, row);
         row++;
 
-        perpGrid.add(new Label("TACS threshold (deg):"), 0, row);
+        Label tacsLabel = new Label("TACS threshold (deg):");
+        tacsLabel.setTooltip(new Tooltip("Angle cutoff for TACS classification (5-85 deg)"));
+        perpGrid.add(tacsLabel, 0, row);
         tacsThresholdSpinner = new Spinner<>(
                 new SpinnerValueFactory.DoubleSpinnerValueFactory(5, 85, PPMPreferences.getTacsThresholdDeg(), 5));
         tacsThresholdSpinner.setEditable(true);
