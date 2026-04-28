@@ -9,11 +9,11 @@
 
 ## Overview
 
-**qupath-extension-ppm** is an **analysis extension** for [QuPath](https://qupath.github.io/) that provides image analysis and processing workflows for **Polychromatic Polarization Microscopy (PPM)**.
+**qupath-extension-ppm** is a [QuPath](https://qupath.github.io/) extension for measuring **collagen fiber direction and organization in tissue** from polarized-light microscopy images.
 
-PPM imaging captures multiple polarizer rotation angles per field of view, producing color-encoded images where hue represents fiber orientation. This enables quantitative analysis of birefringent structures such as collagen fiber orientation, organization, and alignment relative to tissue boundaries.
+It works with images from **Polychromatic Polarization Microscopy (PPM)**, a technique where the orientation of birefringent fibers (collagen, muscle, etc.) is encoded as color (hue) in a single image. This extension turns those colors back into quantitative fiber angles, lets you map fiber direction across whole slides, compare alignment between regions, and score how fibers run relative to tissue boundaries -- relevant for fibrosis, tumor stroma, cardiac remodeling, and developmental tissue studies.
 
-This extension adds analysis menus under **Extensions > PPM Analysis** in QuPath. Analysis menus are always available, even on workstations without microscope hardware -- making it safe to install for offline image analysis.
+Analysis menus appear under **Extensions > PPM Analysis** and run on any workstation -- no microscope required -- so the same tools work for offline reanalysis of existing PPM datasets.
 
 > **Hardware/acquisition workflows** (rotation control, calibration, angle selection) are provided by [qupath-extension-qpsc](https://github.com/uw-loci/qupath-extension-qpsc) in its `modality/ppm/` package. This extension does NOT register a modality handler or contain any hardware code.
 
@@ -50,30 +50,30 @@ This extension adds analysis menus under **Extensions > PPM Analysis** in QuPath
 
 | Workflow | Description | Guide |
 |----------|-------------|-------|
-| **Polarizer Calibration** | Calibrate the polarizer rotation stage to determine correct angles for optimal birefringence imaging | [docs](documentation/polarizer-calibration.md) |
-| **PPM Rotation Sensitivity Test** | Test rotation stage sensitivity by acquiring images at precise angles; analyzes angular deviation impact on image quality | [docs](documentation/ppm-sensitivity-test.md) |
-| **PPM Birefringence Optimization** | Find the optimal polarizer angle for maximum birefringence signal contrast by systematically testing paired angles | [docs](documentation/ppm-birefringence-optimization.md) |
-| **PPM Reference Slide (Sunburst)** | Create a hue-to-angle calibration from a reference slide with radial spoke pattern via linear regression | [docs](documentation/ppm-reference-slide.md) |
+| **Polarizer Calibration** | Set up the microscope so fiber colors map correctly to fiber angles -- the foundation step before any quantitative orientation analysis (polarizer rotation stage calibration) | [docs](documentation/polarizer-calibration.md) |
+| **PPM Rotation Sensitivity Test** | Check how much small mechanical errors in the rotation stage affect your measurements -- a quality-control step for the optical setup (angular deviation analysis) | [docs](documentation/ppm-sensitivity-test.md) |
+| **PPM Birefringence Optimization** | Find the polarizer setting that gives the strongest, cleanest fiber signal for your sample type, so faint structures stay visible (paired-angle contrast search) | [docs](documentation/ppm-birefringence-optimization.md) |
+| **PPM Reference Slide (Sunburst)** | Build the color-to-angle lookup from a known radial test pattern, so hues in your tissue images can be read as real fiber directions in degrees (hue-to-angle calibration via linear regression) | [docs](documentation/ppm-reference-slide.md) |
 
 ### Analysis Workflows (in this extension, no microscope needed)
 
 | Workflow | Description | Guide |
 |----------|-------------|-------|
-| **PPM Hue Range Filter** | Real-time overlay highlighting pixels whose fiber angle falls within a user-specified range, using the active calibration | [docs](documentation/ppm-hue-range-filter.md) |
-| **PPM Polarity Plot** | Rose diagram showing fiber angle distribution with circular statistics for selected annotations | [docs](documentation/ppm-polarity-plot.md) |
-| **Surface Perpendicularity (PS-TACS)** | Analyze fiber orientation relative to annotation boundaries; computes perpendicularity scores along tissue surfaces | [docs](documentation/surface-perpendicularity.md) |
-| **Batch PPM Analysis** | Run PPM analysis across all annotations in the current project; exports results as CSV with circular statistics | [docs](documentation/batch-ppm-analysis.md) |
-| **Back-Propagate Annotations** | Transfer annotations from sub-images back to parent/base images using alignment transforms and XY offsets | [docs](documentation/back-propagate-annotations.md) |
+| **PPM Hue Range Filter** | Highlight every region where fibers point in a chosen direction -- e.g. show only fibers running roughly horizontal -- as a live overlay you can sweep through (fiber-angle range overlay using the active calibration) | [docs](documentation/ppm-hue-range-filter.md) |
+| **PPM Polarity Plot** | See whether fibers in an annotation are aligned in one direction or randomly oriented, with a rose/polar diagram and summary alignment statistics (circular statistics: mean angle, dispersion, resultant length) | [docs](documentation/ppm-polarity-plot.md) |
+| **Surface Perpendicularity (PS-TACS)** | Score how fibers run relative to a tissue boundary you draw -- parallel along the edge vs. pointing into it -- useful for tumor-stroma TACS-style analysis and basement-membrane work (perpendicularity score along annotation contours) | [docs](documentation/surface-perpendicularity.md) |
+| **Batch PPM Analysis** | Run the same fiber-orientation analysis across every annotation in a project in one pass and export a CSV ready for stats software (project-wide circular statistics export) | [docs](documentation/batch-ppm-analysis.md) |
+| **Back-Propagate Annotations** | Draw regions on a high-resolution sub-image (e.g. an ROI scan) and push those annotations back onto the parent whole-slide image automatically (alignment-transform + XY-offset propagation) | [docs](documentation/back-propagate-annotations.md) |
 
 ### Acquisition Integration (provided by QPSC)
 
 > These features are part of QPSC's PPM hardware handler (`modality/ppm/PPMModalityHandler`), not this extension.
 
-- Automatic PPM angle sequence loading from microscope configuration
-- Decimal precision exposure times (e.g., 1.2ms, 500.0ms, 0.8ms)
-- User-customizable angle overrides via the bounding box UI
-- Post-processing directory discovery for birefringence and sum images
-- Background validation with angle-specific exposure mismatch detection
+- Acquire PPM image sets without manually entering polarizer angles every time -- the angle sequence is read straight from the microscope configuration
+- Use realistic exposure times for faint or strong signals -- exposures support sub-millisecond decimal precision (e.g. 1.2 ms, 500.0 ms, 0.8 ms)
+- Override the default acquisition angles for one experiment without editing config files, directly in the bounding-box dialog
+- Pick up the right derived images automatically after acquisition (birefringence and sum images), so analysis workflows know where to look
+- Catch background-correction problems early -- the system warns you if your background images were taken at different exposures than your data (angle-specific exposure mismatch detection)
 
 ---
 
@@ -191,6 +191,10 @@ The analysis workflows call [ppm_library](https://github.com/uw-loci/ppm_library
 Java handles QuPath I/O (reading image regions, annotations, GeoJSON export, results display) while Python handles the numerical computation. Communication is via temporary file exchange and subprocess calls.
 
 ---
+
+## Support
+
+For general support and feature requests, please post on the [image.sc forum](https://forum.image.sc/) with the `#qupath` tag and mention `@Mike_Nelson` to flag the topic for my attention.
 
 ## License
 
