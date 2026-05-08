@@ -327,7 +327,8 @@ public class PPMPerpendicularityWorkflow {
 
         // Annotation class selector
         Label boundaryClassLabel = new Label("Boundary annotation class:");
-        boundaryClassLabel.setTooltip(new Tooltip("Annotation class that defines the boundary for perpendicularity analysis"));
+        boundaryClassLabel.setTooltip(
+                new Tooltip("Annotation class that defines the boundary for perpendicularity analysis"));
         grid.add(boundaryClassLabel, 0, row);
         ChoiceBox<String> classChoice = new ChoiceBox<>();
         classChoice.getItems().addAll(classNames);
@@ -354,7 +355,8 @@ public class PPMPerpendicularityWorkflow {
 
         // Dilation
         Label borderZoneLabel = new Label("Border zone width (um):");
-        borderZoneLabel.setTooltip(new Tooltip("Distance from the boundary within which fibers are analyzed (1-500 um)"));
+        borderZoneLabel.setTooltip(
+                new Tooltip("Distance from the boundary within which fibers are analyzed (1-500 um)"));
         grid.add(borderZoneLabel, 0, row);
         Spinner<Double> dilationSpinner =
                 new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(1, 500, getDefaultDilationUm(), 5));
@@ -454,7 +456,8 @@ public class PPMPerpendicularityWorkflow {
         row++;
 
         Label densityLabel = new Label("Min collagen density:");
-        densityLabel.setTooltip(new Tooltip("Normalized collagen density threshold for TACS-1 classification (0.01-0.50)"));
+        densityLabel.setTooltip(
+                new Tooltip("Normalized collagen density threshold for TACS-1 classification (0.01-0.50)"));
         grid.add(densityLabel, 0, row);
         Spinner<Double> densitySpinner =
                 new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0.01, 0.5, 0.1, 0.01));
@@ -522,7 +525,8 @@ public class PPMPerpendicularityWorkflow {
         row++;
 
         Label tacsSmoothLabel = new Label("TACS contour smoothing:");
-        tacsSmoothLabel.setTooltip(new Tooltip("Moving average window for TACS score smoothing along the boundary (1-50)"));
+        tacsSmoothLabel.setTooltip(
+                new Tooltip("Moving average window for TACS score smoothing along the boundary (1-50)"));
         grid.add(tacsSmoothLabel, 0, row);
         Spinner<Integer> smoothWindowSpinner =
                 new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 50, 10, 1));

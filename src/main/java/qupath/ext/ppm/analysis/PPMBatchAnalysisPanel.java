@@ -157,7 +157,8 @@ public class PPMBatchAnalysisPanel extends VBox {
         int row = 0;
 
         Label boundaryLabel = new Label("Boundary class:");
-        boundaryLabel.setTooltip(new Tooltip("Annotation class that defines the boundary for perpendicularity analysis"));
+        boundaryLabel.setTooltip(
+                new Tooltip("Annotation class that defines the boundary for perpendicularity analysis"));
         perpGrid.add(boundaryLabel, 0, row);
         boundaryClassChoice.getItems().addAll(availableClasses);
         if (!availableClasses.isEmpty()) {

@@ -150,8 +150,8 @@ public class PPMHueRangePanel extends VBox {
                 + "Set to 0 to disable. Default 100."));
         minIntValueLabel = new Label("100");
         Label minIntLabel = new Label("Min intensity:");
-        minIntLabel.setTooltip(new Tooltip("Minimum max(R,G,B) pixel intensity.\n"
-                + "Excludes dark absorbing tissue. Set to 0 to disable."));
+        minIntLabel.setTooltip(new Tooltip(
+                "Minimum max(R,G,B) pixel intensity.\n" + "Excludes dark absorbing tissue. Set to 0 to disable."));
         threshGrid.add(minIntLabel, 0, 2);
         threshGrid.add(minIntensitySlider, 1, 2);
         threshGrid.add(minIntValueLabel, 2, 2);

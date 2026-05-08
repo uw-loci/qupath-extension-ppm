@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# ppm depends on qupath-extension-qpsc via mavenLocal(), which itself
+# depends on qupath-extension-tiles-to-pyramid. Both must be checked
+# out and `publishToMavenLocal`'d before ppm can build. This mirrors
+# the local-dev workflow described in build.gradle.kts.
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout ppm
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Checkout tiles-to-pyramid (transitive qpsc dep)
+        uses: actions/checkout@v4
+        with:
+          repository: uw-loci/qupath-extension-tiles-to-pyramid
+          path: tiles-to-pyramid
+
+      - name: Checkout qpsc dependency
+        uses: actions/checkout@v4
+        with:
+          repository: uw-loci/qupath-extension-qpsc
+          path: qpsc
+
+      - name: Grant execute permission for gradlew
+        if: runner.os != 'Windows'
+        run: |
+          chmod +x gradlew
+          chmod +x tiles-to-pyramid/gradlew
+          chmod +x qpsc/gradlew
+
+      - name: Publish tiles-to-pyramid to local Maven
+        run: |
+          cd tiles-to-pyramid
+          ./gradlew publishToMavenLocal
+        shell: bash
+
+      - name: Publish qpsc to local Maven
+        run: |
+          cd qpsc
+          ./gradlew publishToMavenLocal
+        shell: bash
+
+      - name: Build and test (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run ./gradlew build
+        env:
+          DISPLAY: ':99'
+
+      - name: Build and test (Windows)
+        if: runner.os == 'Windows'
+        run: ./gradlew build
