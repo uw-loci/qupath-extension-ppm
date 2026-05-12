@@ -838,8 +838,8 @@ public class PPMPerpendicularityWorkflow {
                             ex.getMessage());
                     Dialogs.showErrorMessage(
                             "Surface Perpendicularity Analysis",
-                            "Failed to open biref sibling '" + analysisSet.birefImage.getImageName()
-                                    + "': " + ex.getMessage());
+                            "Failed to open biref sibling '" + analysisSet.birefImage.getImageName() + "': "
+                                    + ex.getMessage());
                     return;
                 }
 
@@ -848,7 +848,11 @@ public class PPMPerpendicularityWorkflow {
                     for (var ch : classifierImageData.getServer().getMetadata().getChannels()) {
                         String name = ch.getName();
                         int len = name == null ? 0 : name.length();
-                        chDump.append("  - '").append(name).append("' (length=").append(len).append(")\n");
+                        chDump.append("  - '")
+                                .append(name)
+                                .append("' (length=")
+                                .append(len)
+                                .append(")\n");
                     }
                     int nCh = classifierImageData.getServer().nChannels();
                     int expected = pixelClassifier.getMetadata().getInputNumChannels();
