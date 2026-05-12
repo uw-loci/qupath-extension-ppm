@@ -38,6 +38,15 @@ These parameters are set in the [Batch PPM Analysis](batch-ppm-analysis.md) pane
 | **Zone Mode** | "Inside" | Which side of the boundary to analyze: "Inside" (toward tumor), "Outside" (away from tumor) |
 | **PS-TACS Threshold (deg)** | varies | Angle threshold for perpendicular classification. Fibers with deviation > threshold are classified as perpendicular |
 | **Fill Holes** | true | Whether to fill holes in the boundary annotation before computing the boundary normals |
+| **Use Pixel Classifier** | false | Optional: apply a pre-trained pixel classifier to refine the foreground mask (instead of using hue-based thresholding) |
+
+### Pixel Classifier Mode
+
+If **Use Pixel Classifier** is enabled, the workflow will apply a trained QuPath pixel classifier to identify fibers instead of using hue-based thresholding. When using this mode:
+
+- **A biref sibling image must be present in the project** for the current entry. The classifier runs against the birefringence image (+7 / -7 PPM), not the currently open sum image.
+- The pixel classifier must be trained on biref images and must have the correct number of input channels (typically 3 for RGB). If you see a channel compatibility error, verify that your classifier expects the same number of channels as the biref image.
+- If a required biref sibling is missing, the workflow will show an error message. In this case, ensure you have acquired the full PPM image set (multiple angles) for that sample region.
 
 ## Results Panel
 
