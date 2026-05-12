@@ -792,14 +792,19 @@ public class PPMPerpendicularityWorkflow {
             // Show results window
             ensureResultWindow(gui);
 
-            // Find analysis set for biref (not needed if using classifier)
+            // Find analysis set -- needed for biref-intensity mode and for classifier mode
+            // (the classifier runs against the biref sibling, not the current/sum image).
             PPMAnalysisSet analysisSet = null;
-            if (!useClassifier && currentEntry != null) {
+            if (currentEntry != null) {
                 analysisSet = PPMImageSetDiscovery.findPPMAnalysisSet(currentEntry, project);
             }
 
-            // Load pixel classifier if selected (must be done on FX thread / before background)
+            // Load pixel classifier if selected (must be done on FX thread / before background).
+            // In classifier mode the thresholder runs against the biref sibling image -- not the
+            // current viewer image (which is typically the sum). Open the biref ImageData here so
+            // we can validate channel compatibility before any annotation work starts.
             PixelClassifier pixelClassifier = null;
+            ImageData<BufferedImage> classifierImageData = null;
             if (useClassifier) {
                 try {
                     pixelClassifier = project.getPixelClassifiers().get(selectedClassifier);
@@ -810,11 +815,78 @@ public class PPMPerpendicularityWorkflow {
                             "Failed to load pixel classifier '" + selectedClassifier + "': " + ex.getMessage());
                     return;
                 }
+
+                if (analysisSet == null || !analysisSet.hasBirefImage()) {
+                    Dialogs.showErrorMessage(
+                            "Surface Perpendicularity Analysis",
+                            "No biref sibling image found for the current entry.\n\n"
+                                    + "The pixel classifier mode runs the thresholder against the\n"
+                                    + "birefringence image (+7 / -7 PPM), so a biref sibling must be\n"
+                                    + "present in the project for the current image.");
+                    return;
+                }
+
+                try {
+                    @SuppressWarnings("unchecked")
+                    ImageData<BufferedImage> birefData =
+                            (ImageData<BufferedImage>) analysisSet.birefImage.readImageData();
+                    classifierImageData = birefData;
+                } catch (Exception ex) {
+                    logger.error(
+                            "Failed to open biref sibling '{}': {}",
+                            analysisSet.birefImage.getImageName(),
+                            ex.getMessage());
+                    Dialogs.showErrorMessage(
+                            "Surface Perpendicularity Analysis",
+                            "Failed to open biref sibling '" + analysisSet.birefImage.getImageName()
+                                    + "': " + ex.getMessage());
+                    return;
+                }
+
+                if (!pixelClassifier.supportsImage(classifierImageData)) {
+                    StringBuilder chDump = new StringBuilder();
+                    for (var ch : classifierImageData.getServer().getMetadata().getChannels()) {
+                        String name = ch.getName();
+                        int len = name == null ? 0 : name.length();
+                        chDump.append("  - '").append(name).append("' (length=").append(len).append(")\n");
+                    }
+                    int nCh = classifierImageData.getServer().nChannels();
+                    int expected = pixelClassifier.getMetadata().getInputNumChannels();
+                    logger.error(
+                            "Classifier '{}' does not support biref image '{}': expected {} channel(s), found {}. Channels: {}",
+                            selectedClassifier,
+                            analysisSet.birefImage.getImageName(),
+                            expected,
+                            nCh,
+                            chDump);
+                    try {
+                        classifierImageData.getServer().close();
+                    } catch (Exception ignore) {
+                    }
+                    Dialogs.showErrorMessage(
+                            "Surface Perpendicularity Analysis",
+                            "Classifier '" + selectedClassifier
+                                    + "' does not support the biref image\n'"
+                                    + analysisSet.birefImage.getImageName() + "'.\n\n"
+                                    + "Expected " + expected + " input channel(s); biref image has "
+                                    + nCh + ".\n\n"
+                                    + "Biref image channel names (with literal lengths):\n"
+                                    + chDump
+                                    + "\nIf a name looks correct visually but the length is unexpected,\n"
+                                    + "check for trailing whitespace / non-ASCII characters.\n"
+                                    + "Otherwise rebuild the thresholder against this biref image.");
+                    return;
+                }
+                logger.info(
+                        "Classifier '{}' validated against biref image '{}'",
+                        selectedClassifier,
+                        analysisSet.birefImage.getImageName());
             }
 
             // Run in background
             final PPMAnalysisSet finalAnalysisSet = analysisSet;
             final PixelClassifier finalClassifier = pixelClassifier;
+            final ImageData<BufferedImage> finalClassifierImageData = classifierImageData;
             final ImageServer<BufferedImage> sumServer = imageData.getServer();
             final PathObjectHierarchy hierarchy = imageData.getHierarchy();
             final int imageW = sumServer.getWidth();
@@ -888,6 +960,7 @@ public class PPMPerpendicularityWorkflow {
                                 satThreshold,
                                 valThreshold,
                                 finalClassifier,
+                                finalClassifierImageData,
                                 boundarySigma,
                                 smoothWindow,
                                 minCollagenArea,
@@ -1008,6 +1081,13 @@ public class PPMPerpendicularityWorkflow {
                             "Surface Perpendicularity Analysis",
                             DocumentationHelper.withDocLink(
                                     "Analysis failed: " + ex.getMessage(), "ppmPerpendicularity")));
+                } finally {
+                    if (finalClassifierImageData != null) {
+                        try {
+                            finalClassifierImageData.getServer().close();
+                        } catch (Exception ignore) {
+                        }
+                    }
                 }
             });
         });
@@ -1044,6 +1124,7 @@ public class PPMPerpendicularityWorkflow {
             double saturationThreshold,
             double valueThreshold,
             PixelClassifier classifier,
+            ImageData<BufferedImage> classifierImageData,
             double boundarySmoothingSigma,
             int smoothingWindow,
             int minCollagenArea,
@@ -1092,9 +1173,12 @@ public class PPMPerpendicularityWorkflow {
             sumNDArray = bufferedImageToRGBNDArray(sumRegion);
 
             if (classifier != null) {
-                // Pixel classifier mode: generate binary foreground mask
+                // Pixel classifier mode: thresholder runs against the biref sibling ImageData,
+                // not the current/sum viewer image. classifierImageData is opened once in the
+                // outer workflow scope and closed there after the loop completes.
+                ImageData<BufferedImage> clsData = classifierImageData != null ? classifierImageData : imageData;
                 BufferedImage maskImage =
-                        generateClassifierMaskImage(imageData, classifier, expandedX, expandedY, expandedW, expandedH);
+                        generateClassifierMaskImage(clsData, classifier, expandedX, expandedY, expandedW, expandedH);
                 foregroundNDArray = bufferedImageToGrayNDArray(maskImage);
             } else if (analysisSet != null && analysisSet.hasBirefImage()) {
                 try {
