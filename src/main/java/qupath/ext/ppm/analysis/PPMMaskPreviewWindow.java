@@ -21,6 +21,8 @@ import javafx.scene.image.ImageView;
 import javafx.scene.image.PixelWriter;
 import javafx.scene.image.WritableImage;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
@@ -339,7 +341,20 @@ final class PPMMaskPreviewWindow {
         resample.run();
         redraw.run();
 
-        HBox modeRow = new HBox(12, hsvMode, birefMode);
+        javafx.scene.control.Button helpBtn = new javafx.scene.control.Button("?");
+        helpBtn.setTooltip(new Tooltip("What do these modes do?"));
+        helpBtn.setOnAction(e -> Dialogs.showMessageDialog(
+                "Mask preview help",
+                "HSV/Intensity:\n"
+                        + "Use the HSV and min pixel intensity settings to exclude dark\n"
+                        + "objects like nuclei or saturated areas.\n\n"
+                        + "Biref threshold:\n"
+                        + "Adjust the Birefringence threshold and blur to ensure you are\n"
+                        + "maximizing the amount of collagen you are detecting, while\n"
+                        + "minimizing lost signal."));
+        Region modeSpacer = new Region();
+        HBox.setHgrow(modeSpacer, Priority.ALWAYS);
+        HBox modeRow = new HBox(12, hsvMode, birefMode, modeSpacer, helpBtn);
         modeRow.setAlignment(Pos.CENTER_LEFT);
         HBox controlRow = new HBox(8, new Label("Size:"), sizeChoice, resampleBtn);
         controlRow.setAlignment(Pos.CENTER_LEFT);
