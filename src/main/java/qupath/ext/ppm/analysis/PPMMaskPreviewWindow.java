@@ -281,12 +281,14 @@ final class PPMMaskPreviewWindow {
         resample.run();
         redraw.run();
 
-        HBox topRow = new HBox(10, hsvMode, birefMode, new Label("Size:"), sizeChoice, resampleBtn);
-        topRow.setAlignment(Pos.CENTER_LEFT);
-        HBox bottomRow = new HBox(8, new Label("Overlay opacity:"), opacitySlider, info);
-        bottomRow.setAlignment(Pos.CENTER_LEFT);
+        HBox modeRow = new HBox(12, hsvMode, birefMode);
+        modeRow.setAlignment(Pos.CENTER_LEFT);
+        HBox controlRow = new HBox(8, new Label("Size:"), sizeChoice, resampleBtn);
+        controlRow.setAlignment(Pos.CENTER_LEFT);
+        HBox opacityRow = new HBox(8, new Label("Opacity:"), opacitySlider);
+        opacityRow.setAlignment(Pos.CENTER_LEFT);
 
-        VBox root = new VBox(8, topRow, imageView, bottomRow);
+        VBox root = new VBox(6, modeRow, controlRow, imageView, opacityRow, info);
         root.setPadding(new Insets(8));
         root.setAlignment(Pos.CENTER);
 
