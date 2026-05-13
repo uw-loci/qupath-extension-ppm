@@ -46,6 +46,15 @@ public class PPMPreferences {
     private static final StringProperty perpBoundaryClass =
             PathPrefs.createPersistentPreference("PPMPerpBoundaryClass", "");
 
+    private static final StringProperty birefBlurSigma =
+            PathPrefs.createPersistentPreference("PPMBirefBlurSigma", "0.0");
+
+    private static final StringProperty hsvBlurSigma = PathPrefs.createPersistentPreference("PPMHsvBlurSigma", "0.0");
+
+    /** Hex web colour (e.g. "#00E5FF") used as the preview-mask overlay. */
+    private static final StringProperty maskOverlayColor =
+            PathPrefs.createPersistentPreference("PPMMaskOverlayColor", "#00E5FF");
+
     // Shared with QPSC -- same global preference key, read-only from analysis side
     private static final StringProperty activeCalibrationPath =
             PathPrefs.createPersistentPreference("PPMActiveCalibrationPath", "");
@@ -148,6 +157,30 @@ public class PPMPreferences {
 
     public static void setPerpBoundaryClass(String className) {
         perpBoundaryClass.set(className == null ? "" : className);
+    }
+
+    public static double getBirefBlurSigma() {
+        return Double.parseDouble(birefBlurSigma.get());
+    }
+
+    public static void setBirefBlurSigma(double sigma) {
+        birefBlurSigma.set(String.valueOf(sigma));
+    }
+
+    public static double getHsvBlurSigma() {
+        return Double.parseDouble(hsvBlurSigma.get());
+    }
+
+    public static void setHsvBlurSigma(double sigma) {
+        hsvBlurSigma.set(String.valueOf(sigma));
+    }
+
+    public static String getMaskOverlayColor() {
+        return maskOverlayColor.get();
+    }
+
+    public static void setMaskOverlayColor(String hex) {
+        maskOverlayColor.set(hex == null ? "#00E5FF" : hex);
     }
 
     // =============== Active Calibration (shared with QPSC) ===============

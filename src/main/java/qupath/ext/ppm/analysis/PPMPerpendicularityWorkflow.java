@@ -622,6 +622,18 @@ public class PPMPerpendicularityWorkflow {
         grid.add(birefSpinner, 1, row);
         row++;
 
+        Label birefBlurLabel = new Label("Gaussian blur (px):");
+        birefBlurLabel.setStyle("-fx-padding: 0 0 0 16;");
+        birefBlurLabel.setTooltip(
+                new Tooltip("Pre-blur applied to the biref image before thresholding (0-10 px). 0 = no blur."));
+        grid.add(birefBlurLabel, 0, row);
+        Spinner<Double> birefBlurSpinner = new Spinner<>(
+                new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 10, PPMPreferences.getBirefBlurSigma(), 0.5));
+        birefBlurSpinner.setEditable(true);
+        birefBlurSpinner.setTooltip(birefBlurLabel.getTooltip());
+        grid.add(birefBlurSpinner, 1, row);
+        row++;
+
         Label satLabel = new Label("HSV saturation threshold:");
         satLabel.setTooltip(new Tooltip("Minimum HSV saturation for meaningful orientation (0-1)"));
         grid.add(satLabel, 0, row);
@@ -669,6 +681,18 @@ public class PPMPerpendicularityWorkflow {
         minIntTip.setShowDelay(Duration.millis(400));
         minIntensitySpinner.setTooltip(minIntTip);
         grid.add(minIntensitySpinner, 1, row);
+        row++;
+
+        Label hsvBlurLabel = new Label("Gaussian blur (px):");
+        hsvBlurLabel.setStyle("-fx-padding: 0 0 0 16;");
+        hsvBlurLabel.setTooltip(new Tooltip("Pre-blur applied to the RGB image before HSV saturation /\n"
+                + "value / min-intensity thresholding (0-10 px). 0 = no blur."));
+        grid.add(hsvBlurLabel, 0, row);
+        Spinner<Double> hsvBlurSpinner = new Spinner<>(
+                new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 10, PPMPreferences.getHsvBlurSigma(), 0.5));
+        hsvBlurSpinner.setEditable(true);
+        hsvBlurSpinner.setTooltip(hsvBlurLabel.getTooltip());
+        grid.add(hsvBlurSpinner, 1, row);
         row++;
 
         // -- Pixel classifier controls --
@@ -741,7 +765,16 @@ public class PPMPerpendicularityWorkflow {
             PPMAnalysisSet previewAnalysisSet =
                     currentEntry != null ? PPMImageSetDiscovery.findPPMAnalysisSet(currentEntry, project) : null;
             PPMMaskPreviewWindow.show(
-                    gui, imageData, previewAnalysisSet, satSpinner, valSpinner, minIntensitySpinner, birefSpinner);
+                    gui,
+                    imageData,
+                    previewAnalysisSet,
+                    satSpinner,
+                    valSpinner,
+                    minIntensitySpinner,
+                    birefSpinner,
+                    hsvBlurSpinner,
+                    birefBlurSpinner,
+                    classifierRadio.selectedProperty());
         });
         Button runButton = new Button("Run Analysis");
         Button cancelButton = new Button("Cancel");
@@ -772,6 +805,8 @@ public class PPMPerpendicularityWorkflow {
             boolean extendedTacs = extendedTacsBox.isSelected();
             double minCollagenDensity = densitySpinner.getValue();
             double minSignalThreshold = signalSpinner.getValue();
+            double birefBlurSigma = birefBlurSpinner.getValue();
+            double hsvBlurSigma = hsvBlurSpinner.getValue();
 
             // Persist user-modified values for next session
             PPMPreferences.setDilationUm(dilationUm);
@@ -781,6 +816,8 @@ public class PPMPerpendicularityWorkflow {
             PPMPreferences.setValueThreshold(valThreshold);
             PPMPreferences.setMinPolylineLengthPx(minPolylineLength);
             PPMPreferences.setMinRgbIntensity(minRgbIntensity);
+            PPMPreferences.setBirefBlurSigma(birefBlurSigma);
+            PPMPreferences.setHsvBlurSigma(hsvBlurSigma);
             if (selectedClass != null) {
                 PPMPreferences.setPerpBoundaryClass(selectedClass);
             }
@@ -993,6 +1030,8 @@ public class PPMPerpendicularityWorkflow {
                                 extendedTacs,
                                 minCollagenDensity,
                                 minSignalThreshold,
+                                birefBlurSigma,
+                                hsvBlurSigma,
                                 annotationOutputDir);
 
                         // Save JSON result
@@ -1170,6 +1209,8 @@ public class PPMPerpendicularityWorkflow {
             boolean extendedTacs,
             double minCollagenDensity,
             double minSignalThreshold,
+            double birefBlurSigma,
+            double hsvBlurSigma,
             Path outputDir)
             throws Exception {
 
@@ -1255,6 +1296,8 @@ public class PPMPerpendicularityWorkflow {
             inputs.put("min_collagen_area", minCollagenArea);
             inputs.put("mask_smoothing_sigma", maskSmoothingSigma);
             inputs.put("min_rgb_intensity", minRgbIntensity);
+            inputs.put("biref_blur_sigma", birefBlurSigma);
+            inputs.put("hsv_blur_sigma", hsvBlurSigma);
             inputs.put("extended_tacs", extendedTacs);
             inputs.put("min_collagen_density", minCollagenDensity);
             inputs.put("min_signal_threshold", minSignalThreshold);
