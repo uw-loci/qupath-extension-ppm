@@ -130,6 +130,14 @@ Notes:
 - TACS-1 / Unclassified only appear when **Enable TACS-1 classification** is on. With it off, every contour pixel is either TACS-2 or TACS-3.
 - Density is *relative* to this contour, not absolute -- a uniformly dense boundary will still have TACS-2/3 across all of it, since the densest point sets the reference for 100%.
 - Short polyline runs (below **Min polyline length**) are absorbed into the adjacent same-class run before being drawn.
+- With **Enable TACS-1 classification** on, the polylines drawn on the boundary are the *reclassified* TACS-1/2/3 segments -- TACS-1 replaces (not overlays) the TACS-2/3 segments it demotes, and Unclassified stretches produce a gap with no polyline.
+
+### Saving results
+
+The results window has two buttons in its title row:
+
+- **Open analysis folder** -- opens the per-image `analysis/perpendicularity/<image_name>/` directory in your OS file manager. Each annotation has its own subfolder named `annotation_<NN>_<annotation_name>/` containing `results.json` (now also stamped with `image_name`, `annotation_name`, and `annotation_index` so the file is self-describing), the foreground-mask PNG, and any saved intermediate masks.
+- **Export results as PNG...** -- snapshots the full scrollable results panel (histograms, bars, summary stats for every annotation, foreground-mask thumbnail) into a single PNG. The default save location is the analysis output folder for the current image.
 
 ### Summary Statistics
 

@@ -960,6 +960,9 @@ public class PPMPerpendicularityWorkflow {
                     .resolve("analysis")
                     .resolve("perpendicularity")
                     .resolve(imageName.replaceAll("[^a-zA-Z0-9._-]", "_"));
+            if (resultPanel != null) {
+                resultPanel.setAnalysisOutputDir(outputDir);
+            }
 
             CompletableFuture.runAsync(() -> {
                 try {
@@ -1004,7 +1007,12 @@ public class PPMPerpendicularityWorkflow {
                             }
                         });
 
-                        Path annotationOutputDir = outputDir.resolve("annotation_" + annotationIndex);
+                        String safeAnnotationName =
+                                annotationName == null ? "" : annotationName.replaceAll("[^a-zA-Z0-9._-]", "_");
+                        String annotationDirName = safeAnnotationName.isEmpty()
+                                ? String.format("annotation_%02d", annotationIndex)
+                                : String.format("annotation_%02d_%s", annotationIndex, safeAnnotationName);
+                        Path annotationOutputDir = outputDir.resolve(annotationDirName);
 
                         AnnotationResult annResult = computeForAnnotation(
                                 sumServer,
@@ -1033,6 +1041,12 @@ public class PPMPerpendicularityWorkflow {
                                 birefBlurSigma,
                                 hsvBlurSigma,
                                 annotationOutputDir);
+
+                        // Stamp identifying metadata onto the JSON so files saved in the
+                        // analysis folder are self-describing (image + annotation names).
+                        annResult.json.addProperty("image_name", imageName);
+                        annResult.json.addProperty("annotation_name", annotationName);
+                        annResult.json.addProperty("annotation_index", annotationIndex);
 
                         // Save JSON result
                         annotationOutputDir.toFile().mkdirs();
@@ -1075,7 +1089,9 @@ public class PPMPerpendicularityWorkflow {
                             }
                         }
 
-                        // Create TACS polyline annotations from contour data
+                        // Create TACS polyline annotations from contour data. When extended
+                        // TACS is enabled, the polyline pass auto-consumes the extended class
+                        // array so TACS-1 replaces (not overlays) TACS-2/3 on demoted segments.
                         List<PathObject> polylines = createTACSPolylines(
                                 annResult.json,
                                 annResult.offsetX,
@@ -1088,24 +1104,7 @@ public class PPMPerpendicularityWorkflow {
                         }
                         allTacsPolylines.addAll(polylines);
 
-                        // Create TACS-1 polylines from extended TACS (if enabled)
-                        List<PathObject> tacs1Polylines = createTACS1Polylines(
-                                annResult.json,
-                                annResult.offsetX,
-                                annResult.offsetY,
-                                imageW,
-                                imageH,
-                                finalMinPolylineLength);
-                        for (PathObject p : tacs1Polylines) {
-                            p.getMeasurementList().put("Perp. parent", annotationIndex);
-                        }
-                        allTacsPolylines.addAll(tacs1Polylines);
-
-                        logger.info(
-                                "Created {} TACS polylines ({} TACS-1) for annotation '{}'",
-                                polylines.size(),
-                                tacs1Polylines.size(),
-                                annotationName);
+                        logger.info("Created {} TACS polylines for annotation '{}'", polylines.size(), annotationName);
 
                         // Display results
                         final JsonObject finalResult = annResult.json;
@@ -1441,17 +1440,28 @@ public class PPMPerpendicularityWorkflow {
 
         List<PathObject> polylines = new ArrayList<>();
 
+        // Prefer extended TACS classes (0=Unclassified, 1=TACS-1, 2=TACS-2, 3=TACS-3)
+        // when present. Class 0 acts as a hard break so no polyline is drawn through
+        // Unclassified stretches, and TACS-1 actually replaces the underlying TACS-2/3
+        // for demoted segments (not just overlaid on top).
+        JsonObject extTacs =
+                result.has("extended_tacs") && !result.get("extended_tacs").isJsonNull()
+                        ? result.getAsJsonObject("extended_tacs")
+                        : null;
         JsonObject pstacs =
                 result.has("pstacs") && !result.get("pstacs").isJsonNull() ? result.getAsJsonObject("pstacs") : null;
-        if (pstacs == null) return polylines;
+        JsonObject source = extTacs != null ? extTacs : pstacs;
+        if (source == null) return polylines;
 
-        JsonArray pointsArr = pstacs.has("contour_points") ? pstacs.getAsJsonArray("contour_points") : null;
-        JsonArray classArr = pstacs.has("contour_tacs_class") ? pstacs.getAsJsonArray("contour_tacs_class") : null;
+        String classKey = extTacs != null ? "extended_tacs_class" : "contour_tacs_class";
+        JsonArray pointsArr = source.has("contour_points") ? source.getAsJsonArray("contour_points") : null;
+        JsonArray classArr = source.has(classKey) ? source.getAsJsonArray(classKey) : null;
         if (pointsArr == null || classArr == null || pointsArr.size() == 0) return polylines;
 
         int n = Math.min(pointsArr.size(), classArr.size());
 
-        // Get or create TACS PathClasses with specified colors
+        PathClass tacs1Class = PathClass.fromString("TACS-1", TACS1_COLOR);
+        tacs1Class.setColor(TACS1_COLOR);
         PathClass tacs2Class = PathClass.fromString("TACS-2", TACS2_COLOR);
         tacs2Class.setColor(TACS2_COLOR);
         PathClass tacs3Class = PathClass.fromString("TACS-3", TACS3_COLOR);
@@ -1459,24 +1469,33 @@ public class PPMPerpendicularityWorkflow {
 
         double margin = IMAGE_BORDER_MARGIN_PX;
 
-        // Pass 1: Collect contiguous runs of the same class, splitting at borders.
-        // Border points create null-separator entries in the list.
+        // Pass 1: contiguous same-class runs. Class 0 (Unclassified) and image-border
+        // points are hard breaks; a null separator prevents merging across the gap.
         List<TACSSegment> segments = new ArrayList<>();
         TACSSegment current = null;
 
         for (int i = 0; i < n; i++) {
+            int tacsClass = classArr.get(i).getAsInt();
+            if (tacsClass == 0) {
+                if (current != null && current.size() > 0) {
+                    segments.add(current);
+                    current = null;
+                }
+                if (!segments.isEmpty() && segments.get(segments.size() - 1) != null) {
+                    segments.add(null);
+                }
+                continue;
+            }
+
             JsonArray pt = pointsArr.get(i).getAsJsonArray();
             double px = pt.get(0).getAsDouble() + offsetX;
             double py = pt.get(1).getAsDouble() + offsetY;
-            int tacsClass = classArr.get(i).getAsInt();
 
-            // Border points act as hard breaks
             if (px < margin || py < margin || px > imageW - margin || py > imageH - margin) {
                 if (current != null && current.size() > 0) {
                     segments.add(current);
                     current = null;
                 }
-                // Add null separator to prevent merging across border gaps
                 if (!segments.isEmpty() && segments.get(segments.size() - 1) != null) {
                     segments.add(null);
                 }
@@ -1496,9 +1515,7 @@ public class PPMPerpendicularityWorkflow {
             segments.add(current);
         }
 
-        // Pass 2: Merge short segments into adjacent same-class neighbors.
-        // If segment[i] is short and segment[i-1] and segment[i+1] have the
-        // same class, absorb it and merge all three.
+        // Pass 2: absorb short segments into adjacent same-class neighbours.
         boolean changed = true;
         while (changed) {
             changed = false;
@@ -1512,23 +1529,26 @@ public class PPMPerpendicularityWorkflow {
                 if (prev == null || next == null) continue;
 
                 if (prev.tacsClass == next.tacsClass) {
-                    // Absorb short segment and next into prev
                     prev.absorb(seg);
                     prev.absorb(next);
                     segments.remove(i + 1);
                     segments.remove(i);
                     changed = true;
-                    break; // restart scan after modification
+                    break;
                 }
             }
         }
 
-        // Pass 3: Create polylines from segments that meet minimum length
+        // Pass 3: build polylines.
         for (TACSSegment seg : segments) {
             if (seg == null) continue;
             if (seg.size() < minSegmentLength) continue;
-
-            PathClass pathClass = seg.tacsClass == 3 ? tacs3Class : tacs2Class;
+            PathClass pathClass;
+            switch (seg.tacsClass) {
+                case 1 -> pathClass = tacs1Class;
+                case 3 -> pathClass = tacs3Class;
+                default -> pathClass = tacs2Class;
+            }
             PathObject polyline = buildPolyline(seg.xCoords, seg.yCoords, pathClass);
             if (polyline != null) polylines.add(polyline);
         }
@@ -1553,75 +1573,6 @@ public class PPMPerpendicularityWorkflow {
 
         ROI polylineRoi = ROIs.createPolylineROI(xs, ys, ImagePlane.getDefaultPlane());
         return PathObjects.createAnnotationObject(polylineRoi, pathClass);
-    }
-
-    /**
-     * Creates TACS-1 (sparse collagen) Polyline annotations from extended TACS data.
-     * Only creates polylines for class=1 segments. Returns empty list if extended TACS
-     * was not enabled or has no TACS-1 segments.
-     */
-    private static List<PathObject> createTACS1Polylines(
-            JsonObject result, int offsetX, int offsetY, int imageW, int imageH, int minSegmentLength) {
-
-        List<PathObject> polylines = new ArrayList<>();
-
-        JsonObject extTacs =
-                result.has("extended_tacs") && !result.get("extended_tacs").isJsonNull()
-                        ? result.getAsJsonObject("extended_tacs")
-                        : null;
-        if (extTacs == null) return polylines;
-
-        JsonArray pointsArr = extTacs.has("contour_points") ? extTacs.getAsJsonArray("contour_points") : null;
-        JsonArray classArr = extTacs.has("extended_tacs_class") ? extTacs.getAsJsonArray("extended_tacs_class") : null;
-        if (pointsArr == null || classArr == null || pointsArr.size() == 0) return polylines;
-
-        int n = Math.min(pointsArr.size(), classArr.size());
-        PathClass tacs1Class = PathClass.fromString("TACS-1", TACS1_COLOR);
-        tacs1Class.setColor(TACS1_COLOR);
-        double margin = IMAGE_BORDER_MARGIN_PX;
-
-        // Collect contiguous TACS-1 runs
-        List<TACSSegment> segments = new ArrayList<>();
-        TACSSegment current = null;
-
-        for (int i = 0; i < n; i++) {
-            int tacsClass = classArr.get(i).getAsInt();
-            if (tacsClass != 1) {
-                if (current != null && current.size() > 0) {
-                    segments.add(current);
-                    current = null;
-                }
-                continue;
-            }
-
-            JsonArray pt = pointsArr.get(i).getAsJsonArray();
-            double px = pt.get(0).getAsDouble() + offsetX;
-            double py = pt.get(1).getAsDouble() + offsetY;
-
-            if (px < margin || py < margin || px > imageW - margin || py > imageH - margin) {
-                if (current != null && current.size() > 0) {
-                    segments.add(current);
-                    current = null;
-                }
-                continue;
-            }
-
-            if (current == null) {
-                current = new TACSSegment(1);
-            }
-            current.add(px, py);
-        }
-        if (current != null && current.size() > 0) {
-            segments.add(current);
-        }
-
-        for (TACSSegment seg : segments) {
-            if (seg.size() < minSegmentLength) continue;
-            PathObject polyline = buildPolyline(seg.xCoords, seg.yCoords, tacs1Class);
-            if (polyline != null) polylines.add(polyline);
-        }
-
-        return polylines;
     }
 
     /**

@@ -2,19 +2,33 @@ package qupath.ext.ppm.analysis;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import java.awt.Desktop;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
+import javafx.embed.swing.SwingFXUtils;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.WritableImage;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.stage.FileChooser;
+import javax.imageio.ImageIO;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.fx.dialogs.Dialogs;
 
 /**
  * JavaFX panel for displaying surface perpendicularity analysis results.
@@ -28,6 +42,8 @@ import javafx.scene.text.FontWeight;
  */
 public class PPMPerpendicularityPanel extends VBox {
 
+    private static final Logger logger = LoggerFactory.getLogger(PPMPerpendicularityPanel.class);
+
     private static final double HISTOGRAM_WIDTH = 400;
     private static final double HISTOGRAM_HEIGHT = 180;
     private static final double BAR_HEIGHT = 30;
@@ -35,6 +51,7 @@ public class PPMPerpendicularityPanel extends VBox {
     private final VBox contentBox;
     private final Label statusLabel;
     private final Label titleLabel;
+    private Path analysisOutputDir;
 
     public PPMPerpendicularityPanel() {
         setSpacing(8);
@@ -46,6 +63,15 @@ public class PPMPerpendicularityPanel extends VBox {
         statusLabel = new Label("Waiting for analysis...");
         statusLabel.setWrapText(true);
         statusLabel.setFont(Font.font("System", 11));
+
+        Button exportBtn = new Button("Export results as PNG...");
+        exportBtn.setOnAction(e -> exportAsPng());
+        Button openFolderBtn = new Button("Open analysis folder");
+        openFolderBtn.setOnAction(e -> openAnalysisFolder());
+        Region headerSpacer = new Region();
+        HBox.setHgrow(headerSpacer, Priority.ALWAYS);
+        HBox headerRow = new HBox(8, titleLabel, headerSpacer, openFolderBtn, exportBtn);
+        headerRow.setAlignment(Pos.CENTER_LEFT);
 
         contentBox = new VBox(12);
         contentBox.setPadding(new Insets(5));
@@ -59,7 +85,57 @@ public class PPMPerpendicularityPanel extends VBox {
         refLabel.setStyle("-fx-text-fill: #666666; -fx-font-size: 9px;");
         refLabel.setWrapText(true);
 
-        getChildren().addAll(titleLabel, statusLabel, new Separator(), scrollPane, new Separator(), refLabel);
+        getChildren().addAll(headerRow, statusLabel, new Separator(), scrollPane, new Separator(), refLabel);
+    }
+
+    /**
+     * Records the analysis output directory so the "Open analysis folder" button
+     * and the default export filename can reference it. Safe to call repeatedly.
+     */
+    public void setAnalysisOutputDir(Path dir) {
+        this.analysisOutputDir = dir;
+    }
+
+    private void exportAsPng() {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Export results panel as PNG");
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PNG image", "*.png"));
+        if (analysisOutputDir != null) {
+            File parent = analysisOutputDir.toFile();
+            if (parent.isDirectory()) chooser.setInitialDirectory(parent);
+            chooser.setInitialFileName("perpendicularity_results.png");
+        } else {
+            chooser.setInitialFileName("perpendicularity_results.png");
+        }
+        File target =
+                chooser.showSaveDialog(getScene() == null ? null : getScene().getWindow());
+        if (target == null) return;
+        try {
+            // Snapshot the full content (not just the visible viewport).
+            WritableImage img = contentBox.snapshot(null, null);
+            ImageIO.write(SwingFXUtils.fromFXImage(img, null), "png", target);
+            Dialogs.showInfoNotification("Perpendicularity export", "Saved: " + target.getAbsolutePath());
+        } catch (IOException ex) {
+            logger.error("Failed to export results panel: {}", ex.getMessage(), ex);
+            Dialogs.showErrorMessage("Perpendicularity export", "Failed to save PNG: " + ex.getMessage());
+        }
+    }
+
+    private void openAnalysisFolder() {
+        if (analysisOutputDir == null || !analysisOutputDir.toFile().isDirectory()) {
+            Dialogs.showWarningNotification(
+                    "Perpendicularity export",
+                    analysisOutputDir == null
+                            ? "Analysis hasn't produced an output folder yet."
+                            : "Folder not found: " + analysisOutputDir);
+            return;
+        }
+        try {
+            Desktop.getDesktop().open(analysisOutputDir.toFile());
+        } catch (Exception ex) {
+            logger.warn("Failed to open analysis folder: {}", ex.getMessage());
+            Dialogs.showErrorMessage("Perpendicularity export", "Failed to open folder: " + ex.getMessage());
+        }
     }
 
     /**
@@ -291,9 +367,9 @@ public class PPMPerpendicularityPanel extends VBox {
         gc.setFont(Font.font("System", 10));
         gc.fillText("Deviation from boundary (0=parallel, 90=perpendicular)", x, 12);
 
-        // Parallel (orange, matches TACS-2 annotation color)
+        // Parallel (green, matches TACS-2 annotation color)
         double w1 = totalWidth * pctParallel / 100.0;
-        gc.setFill(Color.rgb(255, 100, 0, 0.8));
+        gc.setFill(Color.rgb(0, 255, 65, 0.8));
         gc.fillRect(x, barY, w1, BAR_HEIGHT);
 
         // Oblique (gray, unclassified in TACS)
@@ -301,9 +377,9 @@ public class PPMPerpendicularityPanel extends VBox {
         gc.setFill(Color.rgb(150, 150, 150, 0.8));
         gc.fillRect(x + w1, barY, w2, BAR_HEIGHT);
 
-        // Perpendicular (green, matches TACS-3 annotation color)
+        // Perpendicular (orange, matches TACS-3 annotation color)
         double w3 = totalWidth * pctPerp / 100.0;
-        gc.setFill(Color.rgb(0, 255, 65, 0.8));
+        gc.setFill(Color.rgb(255, 100, 0, 0.8));
         gc.fillRect(x + w1 + w2, barY, w3, BAR_HEIGHT);
 
         // Labels inside bars (black on bright backgrounds for readability)
@@ -317,7 +393,7 @@ public class PPMPerpendicularityPanel extends VBox {
         // Legend below
         gc.setFont(Font.font("System", 9));
         double legendY = barY + BAR_HEIGHT + 12;
-        gc.setFill(Color.rgb(255, 100, 0));
+        gc.setFill(Color.rgb(0, 255, 65));
         gc.fillRect(x, legendY - 8, 8, 8);
         gc.setFill(Color.BLACK);
         gc.fillText("0-30 (parallel)", x + 12, legendY);
@@ -327,7 +403,7 @@ public class PPMPerpendicularityPanel extends VBox {
         gc.setFill(Color.BLACK);
         gc.fillText("30-60 (oblique)", x + 124, legendY);
 
-        gc.setFill(Color.rgb(0, 255, 65));
+        gc.setFill(Color.rgb(255, 100, 0));
         gc.fillRect(x + 230, legendY - 8, 8, 8);
         gc.setFill(Color.BLACK);
         gc.fillText("60-90 (perpendicular)", x + 244, legendY);
@@ -372,9 +448,9 @@ public class PPMPerpendicularityPanel extends VBox {
             double barHeight = chartHeight * counts[i] / (double) maxCount;
             double barX = originX + i * barWidth;
 
-            // Color gradient from orange (parallel/TACS-2) to green (perpendicular/TACS-3)
+            // Color gradient from green (parallel/TACS-2) to orange (perpendicular/TACS-3)
             double t = (double) i / (nBins - 1);
-            Color barColor = Color.color(1.0 - t, 100.0 / 255 + t * 155.0 / 255, t * 65.0 / 255, 0.8);
+            Color barColor = Color.color(t, (255.0 - t * 155.0) / 255.0, (65.0 * (1.0 - t)) / 255.0, 0.8);
 
             gc.setFill(barColor);
             gc.fillRect(barX, originY - barHeight, barWidth - 1, barHeight);
@@ -410,20 +486,20 @@ public class PPMPerpendicularityPanel extends VBox {
         double totalWidth = HISTOGRAM_WIDTH - 20;
         double x = 10;
 
-        // TACS-2 (orange = parallel to boundary, matches annotation color)
+        // TACS-2 (green = parallel to boundary, matches annotation color)
         double w2 = totalWidth * pctTacs2 / 100.0;
-        gc.setFill(Color.rgb(255, 100, 0, 0.8));
+        gc.setFill(Color.rgb(0, 255, 65, 0.8));
         gc.fillRect(x, barY, w2, BAR_HEIGHT);
 
-        // TACS-3 (green = perpendicular to boundary, matches annotation color)
+        // TACS-3 (orange = perpendicular to boundary, matches annotation color)
         double w3 = totalWidth * pctTacs3 / 100.0;
-        gc.setFill(Color.rgb(0, 255, 65, 0.8));
+        gc.setFill(Color.rgb(255, 100, 0, 0.8));
         gc.fillRect(x + w2, barY, w3, BAR_HEIGHT);
 
         gc.setFont(Font.font("System", FontWeight.BOLD, 11));
-        gc.setFill(Color.WHITE);
-        if (w2 > 60) gc.fillText(String.format("TACS-2: %.1f%%", pctTacs2), x + 4, barY + 20);
         gc.setFill(Color.BLACK);
+        if (w2 > 60) gc.fillText(String.format("TACS-2: %.1f%%", pctTacs2), x + 4, barY + 20);
+        gc.setFill(Color.WHITE);
         if (w3 > 60) gc.fillText(String.format("TACS-3: %.1f%%", pctTacs3), x + w2 + 4, barY + 20);
     }
 
@@ -479,23 +555,22 @@ public class PPMPerpendicularityPanel extends VBox {
         gc.setFill(Color.rgb(255, 255, 0, 0.8));
         gc.fillRect(x + wU, barY, w1, BAR_HEIGHT);
 
-        // TACS-2 (orange = parallel)
+        // TACS-2 (green = parallel)
         double w2 = totalWidth * pct2 / 100.0;
-        gc.setFill(Color.rgb(255, 100, 0, 0.8));
+        gc.setFill(Color.rgb(0, 255, 65, 0.8));
         gc.fillRect(x + wU + w1, barY, w2, BAR_HEIGHT);
 
-        // TACS-3 (green = perpendicular)
+        // TACS-3 (orange = perpendicular)
         double w3 = totalWidth * pct3 / 100.0;
-        gc.setFill(Color.rgb(0, 255, 65, 0.8));
+        gc.setFill(Color.rgb(255, 100, 0, 0.8));
         gc.fillRect(x + wU + w1 + w2, barY, w3, BAR_HEIGHT);
 
         gc.setFont(Font.font("System", FontWeight.BOLD, 10));
         gc.setFill(Color.BLACK);
         if (wU > 40) gc.fillText(String.format("--: %.0f%%", pctU), x + 4, barY + 18);
         if (w1 > 40) gc.fillText(String.format("T1: %.0f%%", pct1), x + wU + 4, barY + 18);
-        gc.setFill(Color.WHITE);
         if (w2 > 40) gc.fillText(String.format("T2: %.0f%%", pct2), x + wU + w1 + 4, barY + 18);
-        gc.setFill(Color.BLACK);
+        gc.setFill(Color.WHITE);
         if (w3 > 40) gc.fillText(String.format("T3: %.0f%%", pct3), x + wU + w1 + w2 + 4, barY + 18);
     }
 
