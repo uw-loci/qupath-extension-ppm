@@ -29,16 +29,28 @@ Perpendicularity analysis reveals how collagen fibers are organized relative to 
 
 ## Analysis Parameters
 
-These parameters are set in the [Batch PPM Analysis](batch-ppm-analysis.md) panel when running perpendicularity as part of a batch, or use defaults for single-annotation analysis.
+These parameters are set in the [Batch PPM Analysis](batch-ppm-analysis.md) panel when running perpendicularity as part of a batch, or use defaults for single-annotation analysis. All parameter values are remembered between sessions.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| **Boundary Class** | (user selects) | The annotation class that defines the tissue boundary (e.g., "Tumor", "Stroma") |
+| **Boundary Class** | (last selected) | The annotation class that defines the tissue boundary (e.g., "Tumor", "Stroma"). The UI remembers your last selection. |
 | **Dilation (um)** | varies | Distance from the boundary to include in the analysis zone, in micrometers |
 | **Zone Mode** | "Inside" | Which side of the boundary to analyze: "Inside" (toward tumor), "Outside" (away from tumor) |
 | **PS-TACS Threshold (deg)** | varies | Angle threshold for perpendicular classification. Fibers with deviation > threshold are classified as perpendicular |
+| **Saturation Threshold** | varies | Minimum saturation (0-1) for a pixel to be included in the analysis. Excludes very desaturated or grayscale areas. |
+| **Value Threshold** | varies | Minimum brightness (0-1) for a pixel to be included. Excludes very dark pixels. |
+| **Min Pixel Intensity** | 100 | Minimum max(R,G,B) to include a pixel. Excludes dark absorbing tissue like hematoxylin staining (0-255). |
 | **Fill Holes** | true | Whether to fill holes in the boundary annotation before computing the boundary normals |
 | **Use Pixel Classifier** | false | Optional: apply a pre-trained pixel classifier to refine the foreground mask (instead of using hue-based thresholding) |
+
+### Live Mask Preview
+
+Click **"Preview mask..."** to open a live preview window showing which pixels would be excluded by the current threshold settings. The preview displays:
+
+- **HSV/intensity exclusions**: Red overlay marks pixels excluded by saturation, value, or minimum RGB intensity thresholds (applied to the current RGB image)
+- **Biref threshold**: Red overlay marks pixels below the biref-image threshold (only shown if a biref sibling exists)
+
+The preview window updates in real-time as you adjust spinner values, and includes controls to change the preview size and overlay opacity. This allows you to refine thresholds before running the full analysis.
 
 ### Pixel Classifier Mode
 
@@ -49,6 +61,13 @@ If **Use Pixel Classifier** is enabled, the workflow will apply a trained QuPath
 - If a required biref sibling is missing, the workflow will show an error message. In this case, ensure you have acquired the full PPM image set (multiple angles) for that sample region.
 
 ## Results Panel
+
+### Output Detections
+
+The workflow creates detection objects visible in the QuPath viewer:
+
+- **PPM-Foreground**: A binary mask detection showing which pixels were included in the analysis (white = included, black = excluded by HSV/intensity/biref thresholds)
+- **PPM-Zone**: The interrogation zone ring showing the exact area analyzed. This spans from the annotation boundary outward (or inward, or both) by the dilation distance, depending on the selected zone mode. Shows the "Dilation (um)" and "Zone area (px)" measurements.
 
 ### Deviation Histogram
 
