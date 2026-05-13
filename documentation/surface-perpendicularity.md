@@ -56,6 +56,7 @@ The preview window includes:
 - **Size selector** -- Choose the region size (128, 256, or 512 px) for faster feedback on small regions
 - **Opacity slider** -- Adjust overlay transparency to see the underlying image
 - **Color picker** -- Select the overlay color (default is cyan to remain visible on H&E and collagen hues)
+- **Help button (?)** -- Click to view an explanation of HSV/Intensity and Birefringence threshold modes
 
 The preview updates in real-time as you adjust any threshold, blur, or opacity control, allowing you to refine parameters before running the full analysis.
 
