@@ -116,10 +116,10 @@ public class PPMPerpendicularityWorkflow {
 
     // TACS-1 = bright yellow (sparse collagen)
     private static final int TACS1_COLOR = ColorTools.packRGB(255, 255, 0);
-    // TACS-2 = neon orange (high visibility on PPM images)
-    private static final int TACS2_COLOR = ColorTools.packRGB(255, 100, 0);
-    // TACS-3 = neon green (high visibility on PPM images)
-    private static final int TACS3_COLOR = ColorTools.packRGB(0, 255, 65);
+    // TACS-2 = neon green (parallel-to-boundary; benign / healthy connotation)
+    private static final int TACS2_COLOR = ColorTools.packRGB(0, 255, 65);
+    // TACS-3 = neon orange (perpendicular-to-boundary; invasive connotation)
+    private static final int TACS3_COLOR = ColorTools.packRGB(255, 100, 0);
 
     private static Stage resultWindow;
     private static PPMPerpendicularityPanel resultPanel;

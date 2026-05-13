@@ -43,7 +43,25 @@ These parameters are set in the [Batch PPM Analysis](batch-ppm-analysis.md) pane
 | **Gaussian blur for HSV (px)** | 0 | Pre-blur sigma (in pixels) applied to the RGB image before HSV/intensity thresholding. Range: 0-10. Use > 0 to reduce noise sensitivity. |
 | **Gaussian blur for biref (px)** | 0 | Pre-blur sigma (in pixels) applied to the birefringence image before thresholding. Range: 0-10. Only used in biref-threshold mode. |
 | **Fill Holes** | true | Whether to fill holes in the boundary annotation before computing the boundary normals |
-| **Use Pixel Classifier** | false | Optional: apply a pre-trained pixel classifier to refine the foreground mask (instead of using hue-based thresholding) |
+| **Use Pixel Classifier** | false | Optional: apply a pre-trained pixel classifier to refine the foreground mask (instead of using hue-based thresholding). Runs against the biref sibling, not the current image. |
+| **Min polyline length (px)** | 20 | Minimum contiguous run of contour points (same TACS class) required to draw a polyline. Shorter runs are absorbed into adjacent same-class neighbours. |
+
+### Extended TACS (TACS-1 / 2 / 3)
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| **Enable TACS-1 classification** | off | Adds TACS-1 (sparse collagen) and Unclassified categories. TACS-2 / TACS-3 are produced regardless; enabling this just reclassifies low-density contour pixels. |
+| **Min collagen density** | 0.10 | Normalised density threshold (0-1). Contour pixels with less than this fraction of the peak density along the contour are demoted to TACS-1. |
+| **Min signal threshold** | 0.02 | Normalised density threshold (0-1). Contour pixels below this fraction of peak are dropped from classification entirely (Unclassified -- no measurable collagen near the contour). |
+
+### Smoothing & Cleanup
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| **Boundary smoothing (px)** | 5.0 | Gaussian sigma for smoothing the boundary mask before extracting the contour and computing normals. Removes pixel-staircase artefacts. 0 disables. |
+| **TACS contour smoothing** | 10 | Moving-average window (samples) applied to TACS scores along the contour. Larger values flatten noisy TACS-2/3 alternations. 1 disables. |
+| **Min collagen area (px)** | 100 | Connected components smaller than this are removed from the foreground mask. 0 disables. |
+| **Mask smoothing sigma (px)** | 2.0 | Gaussian sigma applied to the analysis mask before component-area filtering. 0 disables. |
 
 ### Live Mask Preview
 
@@ -87,13 +105,31 @@ A histogram showing the distribution of deviation angles (0-90 deg) in 10 deg bi
 
 ### Three-Way Classification Bar
 
-A horizontal stacked bar showing the percentage of pixels in each category:
+A horizontal stacked bar showing the percentage of pixels in each category. This is the pixel-level histogram (each valid pixel inside the analysis zone is binned by its deviation angle). For the polyline-level TACS overlays drawn on the boundary itself, see **TACS Classification** below.
 
 | Category | Angle Range | Significance |
 |----------|-------------|-------------|
 | **Parallel** | 0-30 deg | Fibers aligned with the boundary (TACS-2 like) |
 | **Oblique** | 30-60 deg | Intermediate alignment |
 | **Perpendicular** | 60-90 deg | Fibers perpendicular to boundary (TACS-3 like) |
+
+### TACS Classification (polylines along the boundary)
+
+The workflow produces per-contour-pixel TACS scores and draws coloured polylines on the boundary itself. Scoring follows the PS-TACS method (Qian et al., 2025): at each contour pixel, nearby valid fiber pixels within ~3 sigma of the Gaussian falloff (auto-sized from mean fiber distance from the boundary) are weighted by a Gaussian on distance, and the weighted mean of `{+1 if angle < threshold, -1 otherwise}` becomes the score. Scores are then smoothed along the contour by the **TACS contour smoothing** window and binned per pixel into TACS-2 vs TACS-3.
+
+The same loop also accumulates the sum of Gaussian weights at each contour pixel; this is the **density** value used by extended TACS below.
+
+| Class | Color | How it's computed |
+|-------|-------|-------------------|
+| **TACS-2** | green | Per-contour-pixel score indicates parallel-dominant orientation (fibers run *along* the boundary). The default user interpretation is the benign / healthy organisational pattern. |
+| **TACS-3** | orange | Per-contour-pixel score indicates perpendicular-dominant orientation (fibers run *into / out of* the boundary). Associated with invasive collagen architecture (TACS-3 of Provenzano et al., 2006). |
+| **TACS-1** | yellow | *Extended TACS only.* After TACS-2/3 are assigned, the per-contour-pixel collagen density is normalised against the densest point along this contour. Pixels with `density_normalised < min_collagen_density` (default 10% of peak) are **reclassified** as TACS-1, i.e. "collagen is present here but sparse compared to the densest region of the same boundary." This matches the original Provenzano TACS-1 concept (sparse collagen). |
+| **Unclassified** | not drawn | *Extended TACS only.* Pixels with `density_normalised < min_signal_threshold` (default 2% of peak) are dropped from classification entirely -- not enough nearby collagen to score reliably. No polyline is drawn for these segments. |
+
+Notes:
+- TACS-1 / Unclassified only appear when **Enable TACS-1 classification** is on. With it off, every contour pixel is either TACS-2 or TACS-3.
+- Density is *relative* to this contour, not absolute -- a uniformly dense boundary will still have TACS-2/3 across all of it, since the densest point sets the reference for 100%.
+- Short polyline runs (below **Min polyline length**) are absorbed into the adjacent same-class run before being drawn.
 
 ### Summary Statistics
 
