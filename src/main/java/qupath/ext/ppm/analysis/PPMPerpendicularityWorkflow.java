@@ -461,34 +461,41 @@ public class PPMPerpendicularityWorkflow {
         row++;
 
         Label densityLabel = new Label("Min collagen density:");
-        densityLabel.setTooltip(
-                new Tooltip("Normalized collagen density threshold for TACS-1 classification (0.01-0.50)"));
+        densityLabel.setTooltip(new Tooltip("Normalized collagen density threshold for TACS-1 demotion (0.01-0.50).\n"
+                + "INCREASE -> more contour pixels demoted from TACS-2/3 to TACS-1 (sparse).\n"
+                + "DECREASE -> fewer pixels demoted; TACS-2/3 stays in more places."));
         grid.add(densityLabel, 0, row);
         Spinner<Double> densitySpinner =
                 new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0.01, 0.5, 0.1, 0.01));
         densitySpinner.setEditable(true);
         Tooltip densityTip = new Tooltip("Range: 0.01-0.50. Normalized collagen density threshold.\n"
                 + "Contour pixels with less than this fraction of the peak\n"
-                + "observed density are classified as TACS-1 (sparse).\n\n"
-                + "0.10 = regions with <10% of peak density -> TACS-1.\n"
-                + "Increase to classify more regions as TACS-1.\n"
-                + "Decrease to require very sparse regions for TACS-1.");
+                + "observed density along this boundary are reclassified as\n"
+                + "TACS-1 (sparse collagen). Does NOT exclude pixels from analysis --\n"
+                + "it relabels them.\n\n"
+                + "0.10 = regions with <10% of peak density -> TACS-1.\n\n"
+                + "INCREASE -> more contour pixels demoted to TACS-1 (more sparse-labelled).\n"
+                + "DECREASE -> fewer demoted; TACS-2/3 retained more widely.");
         densityTip.setShowDelay(Duration.millis(400));
         densitySpinner.setTooltip(densityTip);
         grid.add(densitySpinner, 1, row);
         row++;
 
         Label signalLabel = new Label("Min signal threshold:");
-        signalLabel.setTooltip(new Tooltip("Normalized density below which a pixel has no collagen signal (0-0.20)"));
+        signalLabel.setTooltip(new Tooltip("Normalized density below which a contour pixel is dropped (0-0.20).\n"
+                + "INCREASE -> more contour pixels dropped as Unclassified (no polyline drawn).\n"
+                + "DECREASE -> more pixels kept (classified into TACS-1/2/3)."));
         grid.add(signalLabel, 0, row);
         Spinner<Double> signalSpinner =
                 new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0.0, 0.2, 0.02, 0.01));
         signalSpinner.setEditable(true);
         Tooltip signalTip = new Tooltip("Range: 0-0.20. Normalized density below which a contour\n"
                 + "pixel is considered to have NO collagen signal at all\n"
-                + "(Unclassified). These segments get no polyline overlay.\n\n"
-                + "This filters out noise and non-collagen tissue at the\n"
-                + "boundary. Set to 0 to classify everything.\n"
+                + "(Unclassified). These segments get no polyline overlay,\n"
+                + "so the boundary line has a gap there.\n\n"
+                + "This filters out noise and non-collagen tissue at the boundary.\n\n"
+                + "INCREASE -> more contour pixels EXCLUDED from classification (more gaps).\n"
+                + "DECREASE -> more pixels INCLUDED in TACS-1/2/3 (set to 0 to classify everything).\n"
                 + "Default 0.02 (2% of peak density).");
         signalTip.setShowDelay(Duration.millis(400));
         signalSpinner.setTooltip(signalTip);
@@ -605,18 +612,19 @@ public class PPMPerpendicularityWorkflow {
 
         // -- Threshold controls --
         Label birefLabel = new Label("Birefringence threshold:");
-        birefLabel.setTooltip(new Tooltip("Minimum birefringence intensity for collagen-positive pixels (0-65535)"));
+        birefLabel.setTooltip(new Tooltip("Minimum birefringence intensity for collagen-positive pixels (0-65535).\n"
+                + "INCREASE -> more pixels EXCLUDED; DECREASE -> more pixels INCLUDED."));
         grid.add(birefLabel, 0, row);
         Spinner<Double> birefSpinner =
                 new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 65535, getBirefThreshold(), 100));
         birefSpinner.setEditable(true);
         Tooltip birefTip = new Tooltip("Range: 0-65535 (16-bit image intensity). Minimum birefringence\n"
                 + "intensity for a pixel to be considered PPM-positive (collagen).\n"
-                + "Pixels below this value are excluded from analysis.\n"
+                + "Pixels below this value are EXCLUDED from analysis.\n"
                 + "Only applies when a birefringence sibling image is found.\n\n"
-                + "Increase to exclude weakly birefringent background;\n"
-                + "decrease to include more tissue. Typical range: 500-10000\n"
-                + "depending on sample brightness and imaging conditions.");
+                + "INCREASE -> more pixels EXCLUDED (stricter; excludes weak signal).\n"
+                + "DECREASE -> more pixels INCLUDED (more permissive).\n"
+                + "Typical range: 500-10000 depending on sample brightness and imaging conditions.");
         birefTip.setShowDelay(Duration.millis(400));
         birefSpinner.setTooltip(birefTip);
         grid.add(birefSpinner, 1, row);
@@ -635,49 +643,58 @@ public class PPMPerpendicularityWorkflow {
         row++;
 
         Label satLabel = new Label("HSV saturation threshold:");
-        satLabel.setTooltip(new Tooltip("Minimum HSV saturation for meaningful orientation (0-1)"));
+        satLabel.setTooltip(new Tooltip("Minimum HSV saturation for meaningful orientation (0-1).\n"
+                + "INCREASE -> more pixels EXCLUDED; DECREASE -> more pixels INCLUDED."));
         grid.add(satLabel, 0, row);
         Spinner<Double> satSpinner = new Spinner<>(
                 new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 1, PPMPreferences.getSaturationThreshold(), 0.05));
         satSpinner.setEditable(true);
         Tooltip satTip = new Tooltip("Range: 0-1. Minimum HSV saturation for a pixel to have a\n"
                 + "meaningful hue/orientation. Filters out grayscale pixels\n"
-                + "that lack color information for angle measurement.\n\n"
-                + "Increase to exclude weakly colored pixels; decrease to\n"
-                + "include more tissue. Default 0.2 works for most samples.");
+                + "that lack color information for angle measurement.\n"
+                + "Pixels below this value are EXCLUDED from analysis.\n\n"
+                + "INCREASE -> more pixels EXCLUDED (stricter; excludes weakly coloured pixels).\n"
+                + "DECREASE -> more pixels INCLUDED (more permissive).\n"
+                + "Default 0.2 works for most samples.");
         satTip.setShowDelay(Duration.millis(400));
         satSpinner.setTooltip(satTip);
         grid.add(satSpinner, 1, row);
         row++;
 
         Label valLabel = new Label("HSV value threshold:");
-        valLabel.setTooltip(new Tooltip("Minimum HSV brightness for included pixels (0-1)"));
+        valLabel.setTooltip(new Tooltip("Minimum HSV brightness for included pixels (0-1).\n"
+                + "INCREASE -> more pixels EXCLUDED; DECREASE -> more pixels INCLUDED."));
         grid.add(valLabel, 0, row);
         Spinner<Double> valSpinner = new Spinner<>(
                 new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 1, PPMPreferences.getValueThreshold(), 0.05));
         valSpinner.setEditable(true);
         Tooltip valTip = new Tooltip("Range: 0-1. Minimum HSV brightness for a pixel to be\n"
-                + "included in analysis. Filters out dark/shadow pixels.\n\n"
-                + "Increase to exclude dim regions; decrease to include\n"
-                + "darker tissue areas. Default 0.2 works for most samples.");
+                + "included in analysis. Filters out dark/shadow pixels.\n"
+                + "Pixels below this value are EXCLUDED from analysis.\n\n"
+                + "INCREASE -> more pixels EXCLUDED (stricter; excludes dim regions).\n"
+                + "DECREASE -> more pixels INCLUDED (includes darker tissue).\n"
+                + "Default 0.2 works for most samples.");
         valTip.setShowDelay(Duration.millis(400));
         valSpinner.setTooltip(valTip);
         grid.add(valSpinner, 1, row);
         row++;
 
         Label minIntLabel = new Label("Min pixel intensity:");
-        minIntLabel.setTooltip(new Tooltip("Minimum max(R,G,B) to exclude dark absorbing tissue (0-255)"));
+        minIntLabel.setTooltip(new Tooltip("Minimum max(R,G,B) to exclude dark absorbing tissue (0-255).\n"
+                + "INCREASE -> more pixels EXCLUDED; DECREASE -> more pixels INCLUDED."));
         grid.add(minIntLabel, 0, row);
         Spinner<Integer> minIntensitySpinner = new Spinner<>(
                 new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 255, PPMPreferences.getMinRgbIntensity(), 10));
         minIntensitySpinner.setEditable(true);
-        Tooltip minIntTip = new Tooltip("Range: 0-255. Minimum max(R,G,B) for a pixel to be included.\n"
-                + "Excludes dark absorbing tissue such as hematoxylin-stained\n"
-                + "nuclei, whose color comes from dye absorption rather than\n"
-                + "birefringence.\n\n"
-                + "A nucleus pixel of (60,50,80) has max=80 and would be\n"
-                + "excluded at the default threshold of 100.\n"
-                + "Set to 0 to disable. Default 100.");
+        Tooltip minIntTip = new Tooltip("Range: 0-255. Minimum max(R,G,B) for a pixel to be INCLUDED.\n"
+                + "Pixels with max(R,G,B) below this value are EXCLUDED from analysis.\n"
+                + "Excludes dark absorbing tissue such as hematoxylin-stained nuclei,\n"
+                + "whose color comes from dye absorption rather than birefringence.\n\n"
+                + "Example: a nucleus pixel of (60,50,80) has max=80 and would be\n"
+                + "excluded at the default threshold of 100.\n\n"
+                + "INCREASE -> more pixels EXCLUDED (cuts more dark tissue).\n"
+                + "DECREASE -> more pixels INCLUDED (set to 0 to disable).\n"
+                + "Default 100.");
         minIntTip.setShowDelay(Duration.millis(400));
         minIntensitySpinner.setTooltip(minIntTip);
         grid.add(minIntensitySpinner, 1, row);
