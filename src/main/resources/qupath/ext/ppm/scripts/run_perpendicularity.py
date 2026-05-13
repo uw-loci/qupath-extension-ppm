@@ -24,6 +24,8 @@ Optional:
     smoothing_window:       int - TACS contour score smoothing window (default 10)
     min_collagen_area:      int - min connected component area in pixels (default 100)
     mask_smoothing_sigma:   float - Gaussian sigma for mask cleanup (default 2.0)
+    biref_blur_sigma:       float - pre-blur on biref image before threshold (default 0)
+    hsv_blur_sigma:         float - pre-blur on RGB before HSV/intensity validity (default 0)
 
 Output:
     task.outputs['result_json'] = JSON string (same format as CLI output)
@@ -114,6 +116,16 @@ try:
     except NameError:
         min_signal = 0.02
 
+    try:
+        biref_blur = float(biref_blur_sigma)
+    except NameError:
+        biref_blur = 0.0
+
+    try:
+        hsv_blur = float(hsv_blur_sigma)
+    except NameError:
+        hsv_blur = 0.0
+
     # Load calibration from file
     calibration = RadialCalibrationResult.load(calibration_path)
 
@@ -145,6 +157,8 @@ try:
         extended_tacs=ext_tacs,
         min_collagen_density=min_density,
         min_signal_threshold=min_signal,
+        biref_blur_sigma=biref_blur,
+        hsv_blur_sigma=hsv_blur,
     )
 
     # Use diagnostic counts and intermediate masks returned by
