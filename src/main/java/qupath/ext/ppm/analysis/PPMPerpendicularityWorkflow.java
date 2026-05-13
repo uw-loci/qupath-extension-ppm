@@ -332,7 +332,12 @@ public class PPMPerpendicularityWorkflow {
         grid.add(boundaryClassLabel, 0, row);
         ChoiceBox<String> classChoice = new ChoiceBox<>();
         classChoice.getItems().addAll(classNames);
-        classChoice.setValue(classNames.get(0));
+        String rememberedClass = PPMPreferences.getPerpBoundaryClass();
+        if (rememberedClass != null && !rememberedClass.isEmpty() && classNames.contains(rememberedClass)) {
+            classChoice.setValue(rememberedClass);
+        } else {
+            classChoice.setValue(classNames.get(0));
+        }
         grid.add(classChoice, 1, row);
 
         // Annotation count label
@@ -651,8 +656,8 @@ public class PPMPerpendicularityWorkflow {
         Label minIntLabel = new Label("Min pixel intensity:");
         minIntLabel.setTooltip(new Tooltip("Minimum max(R,G,B) to exclude dark absorbing tissue (0-255)"));
         grid.add(minIntLabel, 0, row);
-        Spinner<Integer> minIntensitySpinner =
-                new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 255, 100, 10));
+        Spinner<Integer> minIntensitySpinner = new Spinner<>(
+                new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 255, PPMPreferences.getMinRgbIntensity(), 10));
         minIntensitySpinner.setEditable(true);
         Tooltip minIntTip = new Tooltip("Range: 0-255. Minimum max(R,G,B) for a pixel to be included.\n"
                 + "Excludes dark absorbing tissue such as hematoxylin-stained\n"
@@ -728,9 +733,19 @@ public class PPMPerpendicularityWorkflow {
         row++;
 
         // Buttons
+        Button previewButton = new Button("Preview mask...");
+        previewButton.setTooltip(new Tooltip("Open a small live preview showing which pixels would be\n"
+                + "excluded by the current thresholds (HSV/intensity or biref).\n"
+                + "Updates as you change the spinner values."));
+        previewButton.setOnAction(e -> {
+            PPMAnalysisSet previewAnalysisSet =
+                    currentEntry != null ? PPMImageSetDiscovery.findPPMAnalysisSet(currentEntry, project) : null;
+            PPMMaskPreviewWindow.show(
+                    gui, imageData, previewAnalysisSet, satSpinner, valSpinner, minIntensitySpinner, birefSpinner);
+        });
         Button runButton = new Button("Run Analysis");
         Button cancelButton = new Button("Cancel");
-        HBox buttons = new HBox(10, runButton, cancelButton);
+        HBox buttons = new HBox(10, previewButton, runButton, cancelButton);
         buttons.setPadding(new Insets(10, 0, 0, 0));
         grid.add(buttons, 0, row, 3, 1);
 
@@ -765,6 +780,10 @@ public class PPMPerpendicularityWorkflow {
             PPMPreferences.setSaturationThreshold(satThreshold);
             PPMPreferences.setValueThreshold(valThreshold);
             PPMPreferences.setMinPolylineLengthPx(minPolylineLength);
+            PPMPreferences.setMinRgbIntensity(minRgbIntensity);
+            if (selectedClass != null) {
+                PPMPreferences.setPerpBoundaryClass(selectedClass);
+            }
 
             // Validate classifier selection
             if (useClassifier && ("(none available)".equals(selectedClassifier) || selectedClassifier == null)) {
@@ -919,7 +938,8 @@ public class PPMPerpendicularityWorkflow {
                             if ("TACS-1".equals(name)
                                     || "TACS-2".equals(name)
                                     || "TACS-3".equals(name)
-                                    || "PPM-Foreground".equals(name)) {
+                                    || "PPM-Foreground".equals(name)
+                                    || "PPM-Zone".equals(name)) {
                                 previousResults.add(obj);
                             }
                         }
@@ -980,6 +1000,19 @@ public class PPMPerpendicularityWorkflow {
                         Path jsonPath = annotationOutputDir.resolve("results.json");
                         try (Writer writer = Files.newBufferedWriter(jsonPath)) {
                             new Gson().toJson(annResult.json, writer);
+                        }
+
+                        // Create interrogation-zone detection (ring between annotation boundary
+                        // and dilation/erosion edge) so the user can see exactly what area was
+                        // analysed.
+                        double dilationPxForZone = dilationUm / pixelSizeUm;
+                        PathObject zoneDetection =
+                                createInterrogationZoneDetection(annotation.getROI(), zoneMode, dilationPxForZone);
+                        if (zoneDetection != null) {
+                            zoneDetection.getMeasurementList().put("Perp. parent", annotationIndex);
+                            zoneDetection.getMeasurementList().put("Dilation (um)", dilationUm);
+                            zoneDetection.setName("Zone: " + annotationName);
+                            allTacsPolylines.add(zoneDetection);
                         }
 
                         // Save foreground mask as B/W PNG and create detection overlay
@@ -1759,6 +1792,53 @@ public class PPMPerpendicularityWorkflow {
      * actual geometry matching the thresholded pixels, and a detection is
      * created with the "PPM-Foreground" class.
      */
+    /**
+     * Build a detection covering the interrogation zone for an annotation: the ring between
+     * the annotation boundary and the dilation/erosion edge implied by zoneMode.
+     *
+     * <p>outside: ring from boundary outward by dilationPx (buffer(+d) minus original).<br>
+     * inside: ring from boundary inward by dilationPx (original minus buffer(-d)).<br>
+     * both: full ring (buffer(+d) minus buffer(-d)).</p>
+     */
+    private static PathObject createInterrogationZoneDetection(ROI annotationRoi, String zoneMode, double dilationPx) {
+        if (annotationRoi == null || dilationPx <= 0) return null;
+        try {
+            org.locationtech.jts.geom.Geometry base = annotationRoi.getGeometry();
+            if (base == null || base.isEmpty()) return null;
+
+            org.locationtech.jts.geom.Geometry ringGeom;
+            String mode = zoneMode == null ? "outside" : zoneMode.toLowerCase();
+            switch (mode) {
+                case "inside" -> {
+                    org.locationtech.jts.geom.Geometry inner = base.buffer(-dilationPx);
+                    ringGeom = (inner == null || inner.isEmpty()) ? base : base.difference(inner);
+                }
+                case "both" -> {
+                    org.locationtech.jts.geom.Geometry outer = base.buffer(dilationPx);
+                    org.locationtech.jts.geom.Geometry inner = base.buffer(-dilationPx);
+                    ringGeom = (inner == null || inner.isEmpty()) ? outer : outer.difference(inner);
+                }
+                default -> {
+                    org.locationtech.jts.geom.Geometry outer = base.buffer(dilationPx);
+                    ringGeom = outer.difference(base);
+                }
+            }
+            if (ringGeom == null || ringGeom.isEmpty()) return null;
+
+            ROI ringRoi = GeometryTools.geometryToROI(ringGeom, annotationRoi.getImagePlane());
+            int zoneColor = ColorTools.packRGB(200, 200, 80);
+            PathClass zoneClass = PathClass.fromString("PPM-Zone", zoneColor);
+            zoneClass.setColor(zoneColor);
+            PathObject detection = PathObjects.createDetectionObject(ringRoi, zoneClass);
+            detection.getMeasurementList().put("Zone area (px)", ringGeom.getArea());
+            detection.getMeasurementList().put("Zone mode", mode.equals("inside") ? 0 : mode.equals("both") ? 1 : 2);
+            return detection;
+        } catch (Exception ex) {
+            logger.warn("Failed to build interrogation-zone detection: {}", ex.getMessage());
+            return null;
+        }
+    }
+
     private static PathObject createMaskDetection(byte[] maskBytes, int offsetX, int offsetY, int width, int height) {
         try {
             // Build a BufferedImage from the mask bytes

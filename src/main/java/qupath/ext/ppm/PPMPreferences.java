@@ -40,6 +40,12 @@ public class PPMPreferences {
     private static final StringProperty minPolylineLengthPx =
             PathPrefs.createPersistentPreference("PPMMinPolylineLengthPx", "20");
 
+    private static final StringProperty minRgbIntensity =
+            PathPrefs.createPersistentPreference("PPMMinRgbIntensity", "100");
+
+    private static final StringProperty perpBoundaryClass =
+            PathPrefs.createPersistentPreference("PPMPerpBoundaryClass", "");
+
     // Shared with QPSC -- same global preference key, read-only from analysis side
     private static final StringProperty activeCalibrationPath =
             PathPrefs.createPersistentPreference("PPMActiveCalibrationPath", "");
@@ -126,6 +132,22 @@ public class PPMPreferences {
 
     public static void setMinPolylineLengthPx(int px) {
         minPolylineLengthPx.set(String.valueOf(px));
+    }
+
+    public static int getMinRgbIntensity() {
+        return Integer.parseInt(minRgbIntensity.get());
+    }
+
+    public static void setMinRgbIntensity(int intensity) {
+        minRgbIntensity.set(String.valueOf(intensity));
+    }
+
+    public static String getPerpBoundaryClass() {
+        return perpBoundaryClass.get();
+    }
+
+    public static void setPerpBoundaryClass(String className) {
+        perpBoundaryClass.set(className == null ? "" : className);
     }
 
     // =============== Active Calibration (shared with QPSC) ===============
