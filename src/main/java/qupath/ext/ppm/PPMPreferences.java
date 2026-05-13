@@ -55,6 +55,47 @@ public class PPMPreferences {
     private static final StringProperty maskOverlayColor =
             PathPrefs.createPersistentPreference("PPMMaskOverlayColor", "#00E5FF");
 
+    // ---- Group A: top-level analysis defaults --------------------------------
+
+    private static final StringProperty zoneMode = PathPrefs.createPersistentPreference("PPMZoneMode", "outside");
+
+    private static final StringProperty fillHoles = PathPrefs.createPersistentPreference("PPMFillHoles", "true");
+
+    /** True = classifier mode, false = HSV/biref threshold mode. */
+    private static final StringProperty useClassifier =
+            PathPrefs.createPersistentPreference("PPMUseClassifier", "false");
+
+    // ---- Group B: extended-TACS block ----------------------------------------
+
+    private static final StringProperty extendedTacsEnabled =
+            PathPrefs.createPersistentPreference("PPMExtendedTACSEnabled", "false");
+
+    private static final StringProperty minCollagenDensity =
+            PathPrefs.createPersistentPreference("PPMMinCollagenDensity", "0.1");
+
+    private static final StringProperty minSignalThreshold =
+            PathPrefs.createPersistentPreference("PPMMinSignalThreshold", "0.02");
+
+    // ---- Group C: smoothing & cleanup ---------------------------------------
+
+    private static final StringProperty boundarySmoothing =
+            PathPrefs.createPersistentPreference("PPMBoundarySmoothing", "5.0");
+
+    private static final StringProperty tacsContourSmoothing =
+            PathPrefs.createPersistentPreference("PPMTACSContourSmoothing", "10");
+
+    private static final StringProperty minCollagenArea =
+            PathPrefs.createPersistentPreference("PPMMinCollagenArea", "100");
+
+    private static final StringProperty maskSmoothingSigma =
+            PathPrefs.createPersistentPreference("PPMMaskSmoothingSigma", "2.0");
+
+    // ---- Group D: classifier selection ---------------------------------------
+
+    /** Last-used pixel-classifier name. Restored only if still in the project. */
+    private static final StringProperty selectedClassifier =
+            PathPrefs.createPersistentPreference("PPMSelectedClassifier", "");
+
     // Shared with QPSC -- same global preference key, read-only from analysis side
     private static final StringProperty activeCalibrationPath =
             PathPrefs.createPersistentPreference("PPMActiveCalibrationPath", "");
@@ -181,6 +222,102 @@ public class PPMPreferences {
 
     public static void setMaskOverlayColor(String hex) {
         maskOverlayColor.set(hex == null ? "#00E5FF" : hex);
+    }
+
+    // ---- Group A accessors ---------------------------------------------------
+
+    public static String getZoneMode() {
+        return zoneMode.get();
+    }
+
+    public static void setZoneMode(String mode) {
+        zoneMode.set(mode == null ? "outside" : mode);
+    }
+
+    public static boolean getFillHoles() {
+        return Boolean.parseBoolean(fillHoles.get());
+    }
+
+    public static void setFillHoles(boolean value) {
+        fillHoles.set(String.valueOf(value));
+    }
+
+    public static boolean getUseClassifier() {
+        return Boolean.parseBoolean(useClassifier.get());
+    }
+
+    public static void setUseClassifier(boolean value) {
+        useClassifier.set(String.valueOf(value));
+    }
+
+    // ---- Group B accessors ---------------------------------------------------
+
+    public static boolean getExtendedTACSEnabled() {
+        return Boolean.parseBoolean(extendedTacsEnabled.get());
+    }
+
+    public static void setExtendedTACSEnabled(boolean value) {
+        extendedTacsEnabled.set(String.valueOf(value));
+    }
+
+    public static double getMinCollagenDensity() {
+        return Double.parseDouble(minCollagenDensity.get());
+    }
+
+    public static void setMinCollagenDensity(double value) {
+        minCollagenDensity.set(String.valueOf(value));
+    }
+
+    public static double getMinSignalThreshold() {
+        return Double.parseDouble(minSignalThreshold.get());
+    }
+
+    public static void setMinSignalThreshold(double value) {
+        minSignalThreshold.set(String.valueOf(value));
+    }
+
+    // ---- Group C accessors ---------------------------------------------------
+
+    public static double getBoundarySmoothing() {
+        return Double.parseDouble(boundarySmoothing.get());
+    }
+
+    public static void setBoundarySmoothing(double value) {
+        boundarySmoothing.set(String.valueOf(value));
+    }
+
+    public static int getTACSContourSmoothing() {
+        return Integer.parseInt(tacsContourSmoothing.get());
+    }
+
+    public static void setTACSContourSmoothing(int value) {
+        tacsContourSmoothing.set(String.valueOf(value));
+    }
+
+    public static int getMinCollagenArea() {
+        return Integer.parseInt(minCollagenArea.get());
+    }
+
+    public static void setMinCollagenArea(int value) {
+        minCollagenArea.set(String.valueOf(value));
+    }
+
+    public static double getMaskSmoothingSigma() {
+        return Double.parseDouble(maskSmoothingSigma.get());
+    }
+
+    public static void setMaskSmoothingSigma(double value) {
+        maskSmoothingSigma.set(String.valueOf(value));
+    }
+
+    // ---- Group D accessor ----------------------------------------------------
+
+    public static String getSelectedClassifier() {
+        return selectedClassifier.get();
+    }
+
+    public static void setSelectedClassifier(String name) {
+        selectedClassifier.set(name == null ? "" : name);
     }
 
     // =============== Active Calibration (shared with QPSC) ===============

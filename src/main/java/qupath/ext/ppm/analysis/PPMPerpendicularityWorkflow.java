@@ -382,7 +382,8 @@ public class PPMPerpendicularityWorkflow {
         grid.add(zoneModeLabel, 0, row);
         ChoiceBox<String> zoneChoice = new ChoiceBox<>();
         zoneChoice.getItems().addAll("outside", "inside", "both");
-        zoneChoice.setValue("outside");
+        String rememberedZone = PPMPreferences.getZoneMode();
+        zoneChoice.setValue(zoneChoice.getItems().contains(rememberedZone) ? rememberedZone : "outside");
         Tooltip zoneModeTip = new Tooltip("Which side of the boundary to analyze:\n"
                 + "  'outside' - stroma outside the boundary (most common)\n"
                 + "  'inside' - tissue inside the boundary annotation\n"
@@ -414,7 +415,7 @@ public class PPMPerpendicularityWorkflow {
 
         // Fill holes
         CheckBox fillHolesBox = new CheckBox("Fill holes in boundary");
-        fillHolesBox.setSelected(true);
+        fillHolesBox.setSelected(PPMPreferences.getFillHoles());
         Tooltip fillHolesTip = new Tooltip("Fill internal holes in the boundary annotation before\n"
                 + "computing perpendicularity. Enable this (default) to treat\n"
                 + "the boundary as a solid region. Disable only if the holes\n"
@@ -448,7 +449,7 @@ public class PPMPerpendicularityWorkflow {
         row++;
 
         CheckBox extendedTacsBox = new CheckBox("Enable TACS-1 classification");
-        extendedTacsBox.setSelected(false);
+        extendedTacsBox.setSelected(PPMPreferences.getExtendedTACSEnabled());
         Tooltip extTacsTip = new Tooltip("Adds TACS-1 classification for boundary regions where\n"
                 + "collagen density is below threshold (sparse/absent).\n"
                 + "TACS-1 = sparse collagen (Provenzano et al. 2006).\n\n"
@@ -465,8 +466,8 @@ public class PPMPerpendicularityWorkflow {
                 + "INCREASE -> more contour pixels demoted from TACS-2/3 to TACS-1 (sparse).\n"
                 + "DECREASE -> fewer pixels demoted; TACS-2/3 stays in more places."));
         grid.add(densityLabel, 0, row);
-        Spinner<Double> densitySpinner =
-                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0.01, 0.5, 0.1, 0.01));
+        Spinner<Double> densitySpinner = new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(
+                0.01, 0.5, PPMPreferences.getMinCollagenDensity(), 0.01));
         densitySpinner.setEditable(true);
         Tooltip densityTip = new Tooltip("Range: 0.01-0.50. Normalized collagen density threshold.\n"
                 + "Contour pixels with less than this fraction of the peak\n"
@@ -486,8 +487,8 @@ public class PPMPerpendicularityWorkflow {
                 + "INCREASE -> more contour pixels dropped as Unclassified (no polyline drawn).\n"
                 + "DECREASE -> more pixels kept (classified into TACS-1/2/3)."));
         grid.add(signalLabel, 0, row);
-        Spinner<Double> signalSpinner =
-                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0.0, 0.2, 0.02, 0.01));
+        Spinner<Double> signalSpinner = new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(
+                0.0, 0.2, PPMPreferences.getMinSignalThreshold(), 0.01));
         signalSpinner.setEditable(true);
         Tooltip signalTip = new Tooltip("Range: 0-0.20. Normalized density below which a contour\n"
                 + "pixel is considered to have NO collagen signal at all\n"
@@ -502,11 +503,12 @@ public class PPMPerpendicularityWorkflow {
         grid.add(signalSpinner, 1, row);
         row++;
 
-        // Disable extended TACS controls when checkbox is off
-        densityLabel.setDisable(true);
-        densitySpinner.setDisable(true);
-        signalLabel.setDisable(true);
-        signalSpinner.setDisable(true);
+        // Disable extended TACS controls when checkbox is off (matches restored state)
+        boolean extOn = extendedTacsBox.isSelected();
+        densityLabel.setDisable(!extOn);
+        densitySpinner.setDisable(!extOn);
+        signalLabel.setDisable(!extOn);
+        signalSpinner.setDisable(!extOn);
         extendedTacsBox.selectedProperty().addListener((obs, oldVal, newVal) -> {
             densityLabel.setDisable(!newVal);
             densitySpinner.setDisable(!newVal);
@@ -523,8 +525,8 @@ public class PPMPerpendicularityWorkflow {
         Label bndSmoothLabel = new Label("Boundary smoothing (px):");
         bndSmoothLabel.setTooltip(new Tooltip("Gaussian sigma for smoothing the boundary contour (0-20 px)"));
         grid.add(bndSmoothLabel, 0, row);
-        Spinner<Double> boundarySigmaSpinner =
-                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 20, 5.0, 0.5));
+        Spinner<Double> boundarySigmaSpinner = new Spinner<>(
+                new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 20, PPMPreferences.getBoundarySmoothing(), 0.5));
         boundarySigmaSpinner.setEditable(true);
         Tooltip bndSigmaTip = new Tooltip("Range: 0-20 pixels. Gaussian sigma for smoothing the\n"
                 + "boundary contour before computing surface normals.\n"
@@ -540,8 +542,8 @@ public class PPMPerpendicularityWorkflow {
         tacsSmoothLabel.setTooltip(
                 new Tooltip("Moving average window for TACS score smoothing along the boundary (1-50)"));
         grid.add(tacsSmoothLabel, 0, row);
-        Spinner<Integer> smoothWindowSpinner =
-                new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 50, 10, 1));
+        Spinner<Integer> smoothWindowSpinner = new Spinner<>(
+                new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 50, PPMPreferences.getTACSContourSmoothing(), 1));
         smoothWindowSpinner.setEditable(true);
         Tooltip smoothWinTip = new Tooltip("Range: 1-50. Moving average window for TACS contour\n"
                 + "score smoothing. Larger values smooth out noisy\n"
@@ -556,8 +558,8 @@ public class PPMPerpendicularityWorkflow {
         Label minColAreaLabel = new Label("Min collagen area (px):");
         minColAreaLabel.setTooltip(new Tooltip("Connected components smaller than this are removed (0-5000 px)"));
         grid.add(minColAreaLabel, 0, row);
-        Spinner<Integer> minAreaSpinner =
-                new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 5000, 100, 25));
+        Spinner<Integer> minAreaSpinner = new Spinner<>(
+                new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 5000, PPMPreferences.getMinCollagenArea(), 25));
         minAreaSpinner.setEditable(true);
         Tooltip minAreaTip = new Tooltip("Range: 0-5000 pixels. Connected components smaller than\n"
                 + "this are removed from the foreground mask.\n\n"
@@ -571,8 +573,8 @@ public class PPMPerpendicularityWorkflow {
         Label maskSigmaLabel = new Label("Mask smoothing sigma:");
         maskSigmaLabel.setTooltip(new Tooltip("Gaussian sigma for smoothing the foreground mask (0-10 px)"));
         grid.add(maskSigmaLabel, 0, row);
-        Spinner<Double> maskSigmaSpinner =
-                new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 10, 2.0, 0.5));
+        Spinner<Double> maskSigmaSpinner = new Spinner<>(
+                new SpinnerValueFactory.DoubleSpinnerValueFactory(0, 10, PPMPreferences.getMaskSmoothingSigma(), 0.5));
         maskSigmaSpinner.setEditable(true);
         Tooltip maskSigmaTip = new Tooltip("Range: 0-10 pixels. Gaussian sigma for smoothing the\n"
                 + "foreground mask before removing small objects.\n\n"
@@ -593,7 +595,8 @@ public class PPMPerpendicularityWorkflow {
         ToggleGroup foregroundToggle = new ToggleGroup();
         RadioButton thresholdRadio = new RadioButton("Intensity thresholds");
         thresholdRadio.setToggleGroup(foregroundToggle);
-        thresholdRadio.setSelected(true);
+        boolean rememberedUseClassifier = PPMPreferences.getUseClassifier();
+        thresholdRadio.setSelected(!rememberedUseClassifier);
         Tooltip threshRadioTip = new Tooltip("Use birefringence intensity and HSV thresholds to\n"
                 + "identify collagen-containing pixels. Requires a biref\n"
                 + "sibling image in the PPM analysis set.");
@@ -601,6 +604,7 @@ public class PPMPerpendicularityWorkflow {
         thresholdRadio.setTooltip(threshRadioTip);
         RadioButton classifierRadio = new RadioButton("Pixel classifier");
         classifierRadio.setToggleGroup(foregroundToggle);
+        classifierRadio.setSelected(rememberedUseClassifier);
         Tooltip classifierRadioTip = new Tooltip("Use a trained QuPath pixel classifier or thresholder\n"
                 + "to define foreground. Create one via Classify > Pixel\n"
                 + "classification in QuPath before using this option.");
@@ -729,7 +733,14 @@ public class PPMPerpendicularityWorkflow {
             classifierNames.add("(none available)");
         }
         classifierChoice.getItems().addAll(classifierNames);
-        classifierChoice.setValue(classifierNames.get(0));
+        String rememberedClassifier = PPMPreferences.getSelectedClassifier();
+        if (rememberedClassifier != null
+                && !rememberedClassifier.isEmpty()
+                && classifierNames.contains(rememberedClassifier)) {
+            classifierChoice.setValue(rememberedClassifier);
+        } else {
+            classifierChoice.setValue(classifierNames.get(0));
+        }
         Tooltip classifierTip = new Tooltip("Select a pixel classifier or thresholder from the project.\n"
                 + "The classifier's positive/foreground class will be used\n"
                 + "as the analysis mask instead of the birefringence threshold.");
@@ -835,6 +846,19 @@ public class PPMPerpendicularityWorkflow {
             PPMPreferences.setMinRgbIntensity(minRgbIntensity);
             PPMPreferences.setBirefBlurSigma(birefBlurSigma);
             PPMPreferences.setHsvBlurSigma(hsvBlurSigma);
+            PPMPreferences.setZoneMode(zoneMode);
+            PPMPreferences.setFillHoles(fillHoles);
+            PPMPreferences.setUseClassifier(useClassifier);
+            PPMPreferences.setExtendedTACSEnabled(extendedTacs);
+            PPMPreferences.setMinCollagenDensity(minCollagenDensity);
+            PPMPreferences.setMinSignalThreshold(minSignalThreshold);
+            PPMPreferences.setBoundarySmoothing(boundarySigma);
+            PPMPreferences.setTACSContourSmoothing(smoothWindow);
+            PPMPreferences.setMinCollagenArea(minCollagenArea);
+            PPMPreferences.setMaskSmoothingSigma(maskSigma);
+            if (useClassifier && selectedClassifier != null && !"(none available)".equals(selectedClassifier)) {
+                PPMPreferences.setSelectedClassifier(selectedClassifier);
+            }
             if (selectedClass != null) {
                 PPMPreferences.setPerpBoundaryClass(selectedClass);
             }
