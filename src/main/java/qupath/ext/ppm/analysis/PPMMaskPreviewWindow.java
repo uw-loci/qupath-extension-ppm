@@ -4,7 +4,6 @@ import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferUShort;
 import java.awt.image.WritableRaster;
-import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -75,6 +74,11 @@ final class PPMMaskPreviewWindow {
         ImageView imageView = new ImageView();
         imageView.setPreserveRatio(true);
         imageView.setSmooth(false);
+        // Fixed display size so the window layout is stable regardless of region size.
+        // Smaller regions scale up (pixelated, matching the analysis resolution); larger
+        // regions scale down to fit.
+        imageView.setFitWidth(400);
+        imageView.setFitHeight(400);
 
         ToggleGroup modeGroup = new ToggleGroup();
         RadioButton hsvMode = new RadioButton("HSV/intensity exclusions");
@@ -273,11 +277,9 @@ final class PPMMaskPreviewWindow {
             redraw.run();
         });
 
-        // Initial sample + draw
-        Platform.runLater(() -> {
-            resample.run();
-            redraw.run();
-        });
+        // Initial sample + draw synchronously so the window opens fully populated.
+        resample.run();
+        redraw.run();
 
         HBox topRow = new HBox(10, hsvMode, birefMode, new Label("Size:"), sizeChoice, resampleBtn);
         topRow.setAlignment(Pos.CENTER_LEFT);
