@@ -40,17 +40,24 @@ These parameters are set in the [Batch PPM Analysis](batch-ppm-analysis.md) pane
 | **Saturation Threshold** | varies | Minimum saturation (0-1) for a pixel to be included in the analysis. Excludes very desaturated or grayscale areas. |
 | **Value Threshold** | varies | Minimum brightness (0-1) for a pixel to be included. Excludes very dark pixels. |
 | **Min Pixel Intensity** | 100 | Minimum max(R,G,B) to include a pixel. Excludes dark absorbing tissue like hematoxylin staining (0-255). |
+| **Gaussian blur for HSV (px)** | 0 | Pre-blur sigma (in pixels) applied to the RGB image before HSV/intensity thresholding. Range: 0-10. Use > 0 to reduce noise sensitivity. |
+| **Gaussian blur for biref (px)** | 0 | Pre-blur sigma (in pixels) applied to the birefringence image before thresholding. Range: 0-10. Only used in biref-threshold mode. |
 | **Fill Holes** | true | Whether to fill holes in the boundary annotation before computing the boundary normals |
 | **Use Pixel Classifier** | false | Optional: apply a pre-trained pixel classifier to refine the foreground mask (instead of using hue-based thresholding) |
 
 ### Live Mask Preview
 
-Click **"Preview mask..."** to open a live preview window showing which pixels would be excluded by the current threshold settings. The preview displays:
+Click **"Preview mask..."** to open a live preview window showing which pixels would be excluded by the current threshold settings. The preview displays an overlay (default cyan) marking excluded pixels in two modes:
 
-- **HSV/intensity exclusions**: Red overlay marks pixels excluded by saturation, value, or minimum RGB intensity thresholds (applied to the current RGB image)
-- **Biref threshold**: Red overlay marks pixels below the biref-image threshold (only shown if a biref sibling exists)
+- **HSV/intensity exclusions**: Shows pixels excluded by saturation, value, or minimum RGB intensity thresholds (applied to the current RGB image, optionally pre-blurred)
+- **Biref threshold**: Shows pixels below the biref-image threshold (only shown if a biref sibling exists and pixel classifier is not enabled; hidden when using the pixel classifier)
 
-The preview window updates in real-time as you adjust spinner values, and includes controls to change the preview size and overlay opacity. This allows you to refine thresholds before running the full analysis.
+The preview window includes:
+- **Size selector** -- Choose the region size (128, 256, or 512 px) for faster feedback on small regions
+- **Opacity slider** -- Adjust overlay transparency to see the underlying image
+- **Color picker** -- Select the overlay color (default is cyan to remain visible on H&E and collagen hues)
+
+The preview updates in real-time as you adjust any threshold, blur, or opacity control, allowing you to refine parameters before running the full analysis.
 
 ### Pixel Classifier Mode
 
