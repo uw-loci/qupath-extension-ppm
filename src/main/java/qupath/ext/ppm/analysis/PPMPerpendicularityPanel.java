@@ -68,9 +68,12 @@ public class PPMPerpendicularityPanel extends VBox {
         exportBtn.setOnAction(e -> exportAsPng());
         Button openFolderBtn = new Button("Open analysis folder");
         openFolderBtn.setOnAction(e -> openAnalysisFolder());
+        Button hideOverlayBtn = new Button("Hide orientation overlay");
+        hideOverlayBtn.setOnAction(
+                e -> PPMOrientationOverlayController.getInstance().clear());
         Region headerSpacer = new Region();
         HBox.setHgrow(headerSpacer, Priority.ALWAYS);
-        HBox headerRow = new HBox(8, titleLabel, headerSpacer, openFolderBtn, exportBtn);
+        HBox headerRow = new HBox(8, titleLabel, headerSpacer, hideOverlayBtn, openFolderBtn, exportBtn);
         headerRow.setAlignment(Pos.CENTER_LEFT);
 
         contentBox = new VBox(12);
@@ -154,19 +157,65 @@ public class PPMPerpendicularityPanel extends VBox {
     }
 
     /**
+     * Per-annotation overlay descriptor. Lets the panel build a "Show
+     * orientation heatmap" button per annotation without coupling the panel
+     * to the workflow's internal data classes.
+     */
+    public static final class OverlayInfo {
+        public final Path pngPath;
+        public final int offsetX;
+        public final int offsetY;
+        public final int regionW;
+        public final int regionH;
+
+        public OverlayInfo(Path pngPath, int offsetX, int offsetY, int regionW, int regionH) {
+            this.pngPath = pngPath;
+            this.offsetX = offsetX;
+            this.offsetY = offsetY;
+            this.regionW = regionW;
+            this.regionH = regionH;
+        }
+    }
+
+    /**
      * Adds analysis results for one annotation.
      */
     public void addResult(
-            JsonObject result, String annotationName, int index, int totalAnnotations, WritableImage maskImage) {
+            JsonObject result,
+            String annotationName,
+            int index,
+            int totalAnnotations,
+            WritableImage maskImage,
+            OverlayInfo overlay) {
 
         VBox annotationBox = new VBox(6);
         annotationBox.setPadding(new Insets(8));
         annotationBox.setStyle("-fx-border-color: #cccccc; -fx-border-radius: 4;");
 
-        // Header
+        // Header with optional "Show orientation overlay" button on the right.
         Label header = new Label(String.format("Annotation %d/%d: %s", index, totalAnnotations, annotationName));
         header.setFont(Font.font("System", FontWeight.BOLD, 12));
-        annotationBox.getChildren().add(header);
+        if (overlay != null) {
+            Region headerInnerSpacer = new Region();
+            HBox.setHgrow(headerInnerSpacer, Priority.ALWAYS);
+            Button overlayBtn = new Button("Show orientation overlay");
+            overlayBtn.setOnAction(e -> {
+                String token = "annotation_" + index;
+                PPMOrientationOverlayController.getInstance()
+                        .show(
+                                overlay.pngPath,
+                                overlay.offsetX,
+                                overlay.offsetY,
+                                overlay.regionW,
+                                overlay.regionH,
+                                token);
+            });
+            HBox headerLine = new HBox(8, header, headerInnerSpacer, overlayBtn);
+            headerLine.setAlignment(Pos.CENTER_LEFT);
+            annotationBox.getChildren().add(headerLine);
+        } else {
+            annotationBox.getChildren().add(header);
+        }
 
         // Metadata
         double pixelSizeUm = getDouble(result, "pixel_size_um", 0);

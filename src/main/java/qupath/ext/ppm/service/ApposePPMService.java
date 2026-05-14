@@ -70,7 +70,7 @@ public class ApposePPMService {
      * The extension will auto-upgrade ppm_library if the installed
      * version is older than this.</p>
      */
-    private static final String REQUIRED_PPM_VERSION = "1.3.3";
+    private static final String REQUIRED_PPM_VERSION = "1.3.4";
 
     private static ApposePPMService instance;
 

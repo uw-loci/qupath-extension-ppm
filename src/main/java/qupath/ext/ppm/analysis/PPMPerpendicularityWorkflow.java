@@ -1155,6 +1155,13 @@ public class PPMPerpendicularityWorkflow {
                         final byte[] maskBytesForUI = annResult.foregroundMask;
                         final int maskUIW = annResult.regionW;
                         final int maskUIH = annResult.regionH;
+                        final int overlayOffsetX = annResult.offsetX;
+                        final int overlayOffsetY = annResult.offsetY;
+                        Path overlayPng = annotationOutputDir.resolve("deviation_overlay.png");
+                        final PPMPerpendicularityPanel.OverlayInfo overlayInfo = Files.exists(overlayPng)
+                                ? new PPMPerpendicularityPanel.OverlayInfo(
+                                        overlayPng, overlayOffsetX, overlayOffsetY, maskUIW, maskUIH)
+                                : null;
                         Platform.runLater(() -> {
                             if (resultPanel != null) {
                                 WritableImage maskFXImage = null;
@@ -1168,7 +1175,7 @@ public class PPMPerpendicularityWorkflow {
                                         }
                                     }
                                 }
-                                resultPanel.addResult(finalResult, finalName, idx, total, maskFXImage);
+                                resultPanel.addResult(finalResult, finalName, idx, total, maskFXImage, overlayInfo);
                             }
                         });
                     }

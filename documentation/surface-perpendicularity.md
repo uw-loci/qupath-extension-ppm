@@ -132,11 +132,54 @@ Notes:
 - Short polyline runs (below **Min polyline length**) are absorbed into the adjacent same-class run before being drawn.
 - With **Enable TACS-1 classification** on, the polylines drawn on the boundary are the *reclassified* TACS-1/2/3 segments -- TACS-1 replaces (not overlays) the TACS-2/3 segments it demotes, and Unclassified stretches produce a gap with no polyline.
 
+### Pixel-wise Orientation Overlay
+
+Every analysed annotation now writes a `deviation_overlay.png` next to its
+`results.json`. The PNG is an RGBA heatmap of the per-pixel deviation-from-tangent
+angle, mapped through a diverging blue->red colormap so that parallel fibers
+(TACS-2) appear blue and perpendicular fibers (TACS-3) appear red. Pixels
+outside the validated fiber mask are fully transparent so the underlying biref
+image shows through cleanly. The colormap matches Fig 4 E/F of [Qian et al.
+2025](https://doi.org/10.1016/j.ajpath.2025.04.017).
+
+How to use it in the viewer:
+
+- Each annotation block in the results panel now has a **Show orientation overlay**
+  button on its header. Clicking it loads that annotation's PNG and shows it
+  in the viewer, anchored to the analysed region.
+- Only one orientation overlay can be active at a time -- clicking **Show**
+  on a different annotation replaces it.
+- The panel's title row has a **Hide orientation overlay** button to remove
+  it entirely.
+- QuPath's master "Show pixel classification" toggle and the standard opacity
+  slider control the overlay's visibility and transparency, exactly as they
+  do for the DL pixel classifier overlays.
+
+The PNG lives at `analysis/perpendicularity/<image_name>/annotation_<NN>_<name>/deviation_overlay.png`,
+so you can also drop it into Fiji or matplotlib for cross-tool comparison.
+
+### Saved per-pixel arrays
+
+For each annotation, the following `.npy` files are written alongside `results.json`,
+in case you want to do further analysis without re-running QuPath:
+
+| File | Shape | Contents |
+|---|---|---|
+| `deviation_angles.npy` | (H, W) float | Per-pixel deviation from boundary tangent (0-90 deg). NaN where invalid. Source for `deviation_overlay.png`. |
+| `fiber_angles.npy` | (H, W) float | Per-pixel fiber orientation 0-180 deg from the calibration. NaN where invalid. |
+| `fiber_mask.npy` | (H, W) bool | Validated fiber pixels (HSV/intensity/biref or classifier filtered). |
+| `zone_mask.npy` | (H, W) bool | Interrogation zone (between annotation and dilation/erosion edge). |
+| `dist_from_boundary.npy` | (H, W) float | Euclidean distance to the nearest boundary pixel, in image pixels. |
+| `normal_angle_deg.npy` | (H, W) float | Local outward-normal angle (from the distance-transform gradient) 0-180 deg. |
+
 ### Saving results
 
-The results window has two buttons in its title row:
+The results window has three buttons in its title row:
 
-- **Open analysis folder** -- opens the per-image `analysis/perpendicularity/<image_name>/` directory in your OS file manager. Each annotation has its own subfolder named `annotation_<NN>_<annotation_name>/` containing `results.json` (now also stamped with `image_name`, `annotation_name`, and `annotation_index` so the file is self-describing), the foreground-mask PNG, and any saved intermediate masks.
+- **Hide orientation overlay** -- removes the orientation-heatmap overlay from
+  the viewer (no effect if nothing is currently shown). The per-annotation
+  **Show orientation overlay** buttons turn it back on.
+- **Open analysis folder** -- opens the per-image `analysis/perpendicularity/<image_name>/` directory in your OS file manager. Each annotation has its own subfolder named `annotation_<NN>_<annotation_name>/` containing `results.json` (now also stamped with `image_name`, `annotation_name`, and `annotation_index` so the file is self-describing), the foreground-mask PNG, the `deviation_overlay.png`, and the per-pixel `.npy` arrays listed above.
 - **Export results as PNG...** -- snapshots the full scrollable results panel (histograms, bars, summary stats for every annotation, foreground-mask thumbnail) into a single PNG. The default save location is the analysis output folder for the current image.
 
 ### Summary Statistics

@@ -45,6 +45,8 @@ try:
     from ppm_library.analysis.surface_analysis import (
         analyze_perpendicularity,
         rasterize_geojson_to_mask,
+        render_orientation_overlay,
+        save_pixel_arrays,
     )
     from ppm_library.analysis.region_analysis import (
         compute_angles_from_rgb,
@@ -161,6 +163,25 @@ try:
         hsv_blur_sigma=hsv_blur,
     )
 
+    # Persist per-pixel arrays and render the orientation overlay BEFORE
+    # popping the intermediate keys for JSON serialization.
+    if out_dir:
+        try:
+            save_pixel_arrays(result, out_dir)
+            simple_block = result.get('simple') or {}
+            dev_arr = simple_block.get('deviation_angles')
+            if dev_arr is not None and result.get('fiber_mask') is not None:
+                overlay_path = os.path.join(str(out_dir), 'deviation_overlay.png')
+                render_orientation_overlay(
+                    dev_arr,
+                    result['fiber_mask'],
+                    overlay_path,
+                    cmap_name='seismic',
+                )
+                logger.info('Wrote deviation_overlay.png to %s', out_dir)
+        except Exception as render_err:
+            logger.warning('Failed to save per-pixel arrays or overlay: %s', render_err)
+
     # Use diagnostic counts and intermediate masks returned by
     # analyze_perpendicularity (avoids recomputing angles, masks, zones)
     from scipy import ndimage as ndi
@@ -169,6 +190,11 @@ try:
     diag = result.pop('mask_diagnostics')
     fiber_mask = result.pop('fiber_mask')
     zone_mask = result.pop('zone_mask')
+    # Drop the other large per-pixel arrays so they don't bloat the JSON
+    # payload to Java. They were already saved to disk above when out_dir
+    # was set.
+    result.pop('fiber_angles', None)
+    result.pop('dist_from_boundary', None)
 
     # Build analysis mask from the returned intermediate masks
     analysis_mask = fiber_mask & zone_mask
@@ -224,9 +250,12 @@ try:
             return super().default(obj)
 
     # Remove large arrays that aren't needed in JSON output
-    # (deviation_angles is per-pixel, too large for JSON transfer)
+    # (deviation_angles + normal_angle_deg are per-pixel, too large for JSON
+    # transfer). They were already saved to disk when out_dir was set.
     if 'simple' in result and 'deviation_angles' in result['simple']:
         del result['simple']['deviation_angles']
+    if 'simple' in result and 'normal_angle_deg' in result['simple']:
+        del result['simple']['normal_angle_deg']
 
     result_json = json.dumps(result, cls=NumpyEncoder)
     task.outputs['result_json'] = result_json
