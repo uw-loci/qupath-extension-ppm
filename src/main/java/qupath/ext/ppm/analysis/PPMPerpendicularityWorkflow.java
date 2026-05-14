@@ -7,6 +7,7 @@ import com.google.gson.JsonObject;
 import java.awt.image.BufferedImage;
 import java.awt.image.Raster;
 import java.io.IOException;
+import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -585,6 +586,86 @@ public class PPMPerpendicularityWorkflow {
         grid.add(maskSigmaSpinner, 1, row);
         row++;
 
+        // --- Window analysis section ---
+        Label windowHeader = new Label("Window Analysis");
+        windowHeader.setStyle("-fx-font-weight: bold; -fx-padding: 8 0 2 0;");
+        grid.add(windowHeader, 0, row, 3, 1);
+        row++;
+
+        CheckBox windowEnabledCheck = new CheckBox("Enable moving-window alignment");
+        windowEnabledCheck.setSelected(PPMPreferences.getWindowAnalysisEnabled());
+        Tooltip windowEnabledTip = new Tooltip("Aggregate per-pixel fiber orientations into a grid of\n"
+                + "windows over the analysed region. Each window gets a\n"
+                + "dominant orientation and an axial order parameter\n"
+                + "(0 = isotropic, 1 = perfectly aligned). Two heatmap\n"
+                + "PNGs are written next to results.json -- alignment\n"
+                + "and dominant orientation -- and optionally one\n"
+                + "PathObject per non-empty window is added to the\n"
+                + "hierarchy.\n\n"
+                + "Extension beyond the PS-TACS paper (Qian et al. 2025).");
+        windowEnabledTip.setShowDelay(Duration.millis(400));
+        windowEnabledCheck.setTooltip(windowEnabledTip);
+        grid.add(windowEnabledCheck, 0, row, 3, 1);
+        row++;
+
+        Label windowSizeLabel = new Label("Window size (um):");
+        windowSizeLabel.setStyle("-fx-padding: 0 0 0 16;");
+        windowSizeLabel.setTooltip(new Tooltip("Side length of each square window in microns (1-200)."));
+        grid.add(windowSizeLabel, 0, row);
+        Spinner<Double> windowSizeSpinner = new Spinner<>(
+                new SpinnerValueFactory.DoubleSpinnerValueFactory(1.0, 200.0, PPMPreferences.getWindowSizeUm(), 1.0));
+        windowSizeSpinner.setEditable(true);
+        Tooltip windowSizeTip = new Tooltip("Range: 1-200 micrometers. Side length of each square\n"
+                + "window. Smaller windows resolve finer alignment\n"
+                + "variation but produce more objects (count grows\n"
+                + "quadratically). Larger windows smooth over\n"
+                + "structural detail. Default 15 um.");
+        windowSizeTip.setShowDelay(Duration.millis(400));
+        windowSizeSpinner.setTooltip(windowSizeTip);
+        grid.add(windowSizeSpinner, 1, row);
+        row++;
+
+        Label windowOverlapLabel = new Label("Window overlap (%):");
+        windowOverlapLabel.setStyle("-fx-padding: 0 0 0 16;");
+        windowOverlapLabel.setTooltip(new Tooltip("Overlap between adjacent windows as a percentage (0-90)."));
+        grid.add(windowOverlapLabel, 0, row);
+        Spinner<Integer> windowOverlapSpinner = new Spinner<>(
+                new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 90, PPMPreferences.getWindowOverlapPercent(), 5));
+        windowOverlapSpinner.setEditable(true);
+        Tooltip windowOverlapTip = new Tooltip("Range: 0-90 percent. Higher overlap produces denser\n"
+                + "grids (more objects, smoother heatmaps) but takes\n"
+                + "more time to compute. 0 = non-overlapping (default),\n"
+                + "50 = half-overlap.");
+        windowOverlapTip.setShowDelay(Duration.millis(400));
+        windowOverlapSpinner.setTooltip(windowOverlapTip);
+        grid.add(windowOverlapSpinner, 1, row);
+        row++;
+
+        CheckBox windowObjectsCheck = new CheckBox("Create per-window detection objects");
+        windowObjectsCheck.setStyle("-fx-padding: 0 0 0 16;");
+        windowObjectsCheck.setSelected(PPMPreferences.getWindowCreateObjects());
+        Tooltip windowObjectsTip = new Tooltip("When checked, one rectangular PathDetectionObject is\n"
+                + "added to the hierarchy per non-empty window, carrying\n"
+                + "the window's dominant orientation and order parameter\n"
+                + "as measurements. Useful for exporting numeric data\n"
+                + "from individual windows. Disabled by default because\n"
+                + "small windows can produce thousands of objects.");
+        windowObjectsTip.setShowDelay(Duration.millis(400));
+        windowObjectsCheck.setTooltip(windowObjectsTip);
+        grid.add(windowObjectsCheck, 0, row, 3, 1);
+        row++;
+
+        // Keep the sub-controls in sync with the enable toggle so they look
+        // disabled when the user isn't using window analysis.
+        Runnable refreshWindowEnabled = () -> {
+            boolean on = windowEnabledCheck.isSelected();
+            windowSizeSpinner.setDisable(!on);
+            windowOverlapSpinner.setDisable(!on);
+            windowObjectsCheck.setDisable(!on);
+        };
+        refreshWindowEnabled.run();
+        windowEnabledCheck.selectedProperty().addListener((obs, oldV, newV) -> refreshWindowEnabled.run());
+
         // --- Foreground detection section ---
         Label filterHeader = new Label("Foreground Detection");
         filterHeader.setStyle("-fx-font-weight: bold; -fx-padding: 8 0 2 0;");
@@ -835,6 +916,10 @@ public class PPMPerpendicularityWorkflow {
             double minSignalThreshold = signalSpinner.getValue();
             double birefBlurSigma = birefBlurSpinner.getValue();
             double hsvBlurSigma = hsvBlurSpinner.getValue();
+            boolean windowEnabled = windowEnabledCheck.isSelected();
+            double windowSizeUmVal = windowSizeSpinner.getValue();
+            int windowOverlapPctVal = windowOverlapSpinner.getValue();
+            boolean windowCreateObjects = windowObjectsCheck.isSelected();
 
             // Persist user-modified values for next session
             PPMPreferences.setDilationUm(dilationUm);
@@ -856,6 +941,10 @@ public class PPMPerpendicularityWorkflow {
             PPMPreferences.setTACSContourSmoothing(smoothWindow);
             PPMPreferences.setMinCollagenArea(minCollagenArea);
             PPMPreferences.setMaskSmoothingSigma(maskSigma);
+            PPMPreferences.setWindowAnalysisEnabled(windowEnabled);
+            PPMPreferences.setWindowSizeUm(windowSizeUmVal);
+            PPMPreferences.setWindowOverlapPercent(windowOverlapPctVal);
+            PPMPreferences.setWindowCreateObjects(windowCreateObjects);
             if (useClassifier && selectedClassifier != null && !"(none available)".equals(selectedClassifier)) {
                 PPMPreferences.setSelectedClassifier(selectedClassifier);
             }
@@ -1081,6 +1170,9 @@ public class PPMPerpendicularityWorkflow {
                                 minSignalThreshold,
                                 birefBlurSigma,
                                 hsvBlurSigma,
+                                windowEnabled,
+                                windowSizeUmVal,
+                                windowOverlapPctVal,
                                 annotationOutputDir);
 
                         // Stamp identifying metadata onto the JSON so files saved in the
@@ -1147,6 +1239,24 @@ public class PPMPerpendicularityWorkflow {
 
                         logger.info("Created {} TACS polylines for annotation '{}'", polylines.size(), annotationName);
 
+                        // Optional: per-window detection objects from windows.json.
+                        if (windowCreateObjects) {
+                            Path windowsJson = annotationOutputDir.resolve("windows.json");
+                            if (Files.exists(windowsJson)) {
+                                List<PathObject> windowObjects = createWindowDetections(
+                                        windowsJson, annResult.offsetX, annResult.offsetY, annotationIndex);
+                                allTacsPolylines.addAll(windowObjects);
+                                logger.info(
+                                        "Created {} window detection objects for annotation '{}'",
+                                        windowObjects.size(),
+                                        annotationName);
+                            } else {
+                                logger.info(
+                                        "Window-create requested but windows.json missing for annotation '{}'",
+                                        annotationName);
+                            }
+                        }
+
                         // Display results
                         final JsonObject finalResult = annResult.json;
                         final String finalName = annotationName;
@@ -1157,11 +1267,23 @@ public class PPMPerpendicularityWorkflow {
                         final int maskUIH = annResult.regionH;
                         final int overlayOffsetX = annResult.offsetX;
                         final int overlayOffsetY = annResult.offsetY;
-                        Path overlayPng = annotationOutputDir.resolve("deviation_overlay.png");
-                        final PPMPerpendicularityPanel.OverlayInfo overlayInfo = Files.exists(overlayPng)
-                                ? new PPMPerpendicularityPanel.OverlayInfo(
-                                        overlayPng, overlayOffsetX, overlayOffsetY, maskUIW, maskUIH)
-                                : null;
+                        Path devPng = annotationOutputDir.resolve("deviation_overlay.png");
+                        Path alignPng = annotationOutputDir.resolve("alignment_overlay.png");
+                        Path winOrientPng = annotationOutputDir.resolve("orientation_overlay.png");
+                        final Path devPngFinal = Files.exists(devPng) ? devPng : null;
+                        final Path alignPngFinal = Files.exists(alignPng) ? alignPng : null;
+                        final Path winOrientPngFinal = Files.exists(winOrientPng) ? winOrientPng : null;
+                        final PPMPerpendicularityPanel.OverlayInfo overlayInfo =
+                                (devPngFinal != null || alignPngFinal != null || winOrientPngFinal != null)
+                                        ? new PPMPerpendicularityPanel.OverlayInfo(
+                                                devPngFinal,
+                                                alignPngFinal,
+                                                winOrientPngFinal,
+                                                overlayOffsetX,
+                                                overlayOffsetY,
+                                                maskUIW,
+                                                maskUIH)
+                                        : null;
                         Platform.runLater(() -> {
                             if (resultPanel != null) {
                                 WritableImage maskFXImage = null;
@@ -1258,6 +1380,9 @@ public class PPMPerpendicularityWorkflow {
             double minSignalThreshold,
             double birefBlurSigma,
             double hsvBlurSigma,
+            boolean windowAnalysisEnabled,
+            double windowSizeUm,
+            int windowOverlapPercent,
             Path outputDir)
             throws Exception {
 
@@ -1345,6 +1470,9 @@ public class PPMPerpendicularityWorkflow {
             inputs.put("min_rgb_intensity", minRgbIntensity);
             inputs.put("biref_blur_sigma", birefBlurSigma);
             inputs.put("hsv_blur_sigma", hsvBlurSigma);
+            inputs.put("window_analysis_enabled", windowAnalysisEnabled);
+            inputs.put("window_size_um", windowSizeUm);
+            inputs.put("window_overlap_percent", windowOverlapPercent);
             inputs.put("extended_tacs", extendedTacs);
             inputs.put("min_collagen_density", minCollagenDensity);
             inputs.put("min_signal_threshold", minSignalThreshold);
@@ -1879,6 +2007,50 @@ public class PPMPerpendicularityWorkflow {
             logger.warn("Failed to build interrogation-zone detection: {}", ex.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Build one rectangular detection per non-empty window described in the
+     * given {@code windows.json}. Each detection's ROI is anchored at the
+     * window's pixel coordinates (translated by the region offset), and the
+     * mean angle, order parameter, and valid-pixel count are attached as
+     * measurements so they show up in QuPath's measurement table.
+     */
+    private static List<PathObject> createWindowDetections(
+            Path windowsJsonPath, int offsetX, int offsetY, int annotationIndex) {
+        List<PathObject> out = new ArrayList<>();
+        try (Reader reader = Files.newBufferedReader(windowsJsonPath)) {
+            JsonObject root = new Gson().fromJson(reader, JsonObject.class);
+            if (root == null || !root.has("windows")) {
+                return out;
+            }
+            JsonArray windows = root.getAsJsonArray("windows");
+            int outlineColor = ColorTools.packRGB(140, 140, 200);
+            PathClass windowClass = PathClass.fromString("PPM-Window", outlineColor);
+            windowClass.setColor(outlineColor);
+            for (JsonElement el : windows) {
+                if (!el.isJsonObject()) continue;
+                JsonObject w = el.getAsJsonObject();
+                int wx = w.get("x").getAsInt() + offsetX;
+                int wy = w.get("y").getAsInt() + offsetY;
+                int ww = w.get("w").getAsInt();
+                int wh = w.get("h").getAsInt();
+                double meanAngle = w.get("mean_angle_deg").getAsDouble();
+                double orderParam = w.get("order_parameter").getAsDouble();
+                int nPx = w.get("n_pixels").getAsInt();
+
+                ROI rect = ROIs.createRectangleROI(wx, wy, ww, wh, ImagePlane.getDefaultPlane());
+                PathObject det = PathObjects.createDetectionObject(rect, windowClass);
+                det.getMeasurementList().put("Perp. parent", annotationIndex);
+                det.getMeasurementList().put("Window mean angle (deg)", meanAngle);
+                det.getMeasurementList().put("Window order parameter", orderParam);
+                det.getMeasurementList().put("Window valid pixels", nPx);
+                out.add(det);
+            }
+        } catch (Exception ex) {
+            logger.warn("Failed to parse windows.json {}: {}", windowsJsonPath, ex.getMessage());
+        }
+        return out;
     }
 
     private static PathObject createMaskDetection(byte[] maskBytes, int offsetX, int offsetY, int width, int height) {

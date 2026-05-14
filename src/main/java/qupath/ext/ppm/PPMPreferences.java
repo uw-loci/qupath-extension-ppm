@@ -96,6 +96,19 @@ public class PPMPreferences {
     private static final StringProperty selectedClassifier =
             PathPrefs.createPersistentPreference("PPMSelectedClassifier", "");
 
+    // ---- Group E: moving-window analysis ------------------------------------
+
+    private static final StringProperty windowAnalysisEnabled =
+            PathPrefs.createPersistentPreference("PPMWindowAnalysisEnabled", "true");
+
+    private static final StringProperty windowSizeUm = PathPrefs.createPersistentPreference("PPMWindowSizeUm", "15.0");
+
+    private static final StringProperty windowOverlapPercent =
+            PathPrefs.createPersistentPreference("PPMWindowOverlapPercent", "0");
+
+    private static final StringProperty windowCreateObjects =
+            PathPrefs.createPersistentPreference("PPMWindowCreateObjects", "false");
+
     // Shared with QPSC -- same global preference key, read-only from analysis side
     private static final StringProperty activeCalibrationPath =
             PathPrefs.createPersistentPreference("PPMActiveCalibrationPath", "");
@@ -318,6 +331,40 @@ public class PPMPreferences {
 
     public static void setSelectedClassifier(String name) {
         selectedClassifier.set(name == null ? "" : name);
+    }
+
+    // ---- Group E accessors ---------------------------------------------------
+
+    public static boolean getWindowAnalysisEnabled() {
+        return Boolean.parseBoolean(windowAnalysisEnabled.get());
+    }
+
+    public static void setWindowAnalysisEnabled(boolean value) {
+        windowAnalysisEnabled.set(String.valueOf(value));
+    }
+
+    public static double getWindowSizeUm() {
+        return Double.parseDouble(windowSizeUm.get());
+    }
+
+    public static void setWindowSizeUm(double value) {
+        windowSizeUm.set(String.valueOf(value));
+    }
+
+    public static int getWindowOverlapPercent() {
+        return Integer.parseInt(windowOverlapPercent.get());
+    }
+
+    public static void setWindowOverlapPercent(int value) {
+        windowOverlapPercent.set(String.valueOf(value));
+    }
+
+    public static boolean getWindowCreateObjects() {
+        return Boolean.parseBoolean(windowCreateObjects.get());
+    }
+
+    public static void setWindowCreateObjects(boolean value) {
+        windowCreateObjects.set(String.valueOf(value));
     }
 
     // =============== Active Calibration (shared with QPSC) ===============

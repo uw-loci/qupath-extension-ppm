@@ -44,9 +44,13 @@ logger = logging.getLogger("ppm.appose.perpendicularity")
 try:
     from ppm_library.analysis.surface_analysis import (
         analyze_perpendicularity,
+        compute_window_alignment,
         rasterize_geojson_to_mask,
         render_orientation_overlay,
+        render_window_alignment_overlay,
+        render_window_orientation_overlay,
         save_pixel_arrays,
+        save_window_metrics,
     )
     from ppm_library.analysis.region_analysis import (
         compute_angles_from_rgb,
@@ -128,6 +132,21 @@ try:
     except NameError:
         hsv_blur = 0.0
 
+    try:
+        win_enabled = bool(window_analysis_enabled)
+    except NameError:
+        win_enabled = False
+
+    try:
+        win_um = float(window_size_um)
+    except NameError:
+        win_um = 15.0
+
+    try:
+        win_overlap_pct = float(window_overlap_percent)
+    except NameError:
+        win_overlap_pct = 0.0
+
     # Load calibration from file
     calibration = RadialCalibrationResult.load(calibration_path)
 
@@ -181,6 +200,60 @@ try:
                 logger.info('Wrote deviation_overlay.png to %s', out_dir)
         except Exception as render_err:
             logger.warning('Failed to save per-pixel arrays or overlay: %s', render_err)
+
+    # Moving-window alignment analysis (extension beyond the PS-TACS paper).
+    # Aggregates per-pixel fiber orientations into a grid of windows so we can
+    # show alignment + dominant orientation as heatmaps and optionally emit
+    # per-window PathObjects on the Java side.
+    window_summary = None
+    if win_enabled and result.get('fiber_angles') is not None and result.get('fiber_mask') is not None:
+        try:
+            window_px = max(2, int(round(win_um / float(pixel_size_um))))
+            overlap_frac = max(0.0, min(0.95, win_overlap_pct / 100.0))
+            stride_px = max(1, int(round(window_px * (1.0 - overlap_frac))))
+            window_metrics = compute_window_alignment(
+                result['fiber_angles'], result['fiber_mask'], window_px, stride_px
+            )
+            window_metrics['window_um'] = float(win_um)
+            if out_dir:
+                save_window_metrics(window_metrics, out_dir)
+                h_full = result['fiber_angles'].shape[0]
+                w_full = result['fiber_angles'].shape[1]
+                render_window_alignment_overlay(
+                    window_metrics, os.path.join(str(out_dir), 'alignment_overlay.png'), h_full, w_full
+                )
+                render_window_orientation_overlay(
+                    window_metrics, os.path.join(str(out_dir), 'orientation_overlay.png'), h_full, w_full
+                )
+                logger.info(
+                    'Wrote window analysis (%dx%d grid, window=%dpx, stride=%dpx) to %s',
+                    window_metrics['grid_shape'][0],
+                    window_metrics['grid_shape'][1],
+                    window_px,
+                    stride_px,
+                    out_dir,
+                )
+            # Summary stats for the JSON payload (small enough to send back).
+            op = window_metrics['order_parameter']
+            n_nonempty = int(np.count_nonzero(~np.isnan(op)))
+            mean_os = float(np.nanmean(op)) if n_nonempty > 0 else float('nan')
+            window_summary = {
+                'enabled': True,
+                'window_um': float(win_um),
+                'window_px': int(window_px),
+                'stride_px': int(stride_px),
+                'overlap_percent': float(win_overlap_pct),
+                'grid_h': int(window_metrics['grid_shape'][0]),
+                'grid_w': int(window_metrics['grid_shape'][1]),
+                'n_windows_total': int(window_metrics['grid_shape'][0] * window_metrics['grid_shape'][1]),
+                'n_windows_nonempty': n_nonempty,
+                'mean_order_parameter': mean_os,
+            }
+        except Exception as window_err:
+            logger.warning('Window analysis failed: %s', window_err)
+            window_summary = {'enabled': True, 'error': str(window_err)}
+    if window_summary is not None:
+        result['window_analysis'] = window_summary
 
     # Use diagnostic counts and intermediate masks returned by
     # analyze_perpendicularity (avoids recomputing angles, masks, zones)

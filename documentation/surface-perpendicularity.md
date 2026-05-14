@@ -132,6 +132,52 @@ Notes:
 - Short polyline runs (below **Min polyline length**) are absorbed into the adjacent same-class run before being drawn.
 - With **Enable TACS-1 classification** on, the polylines drawn on the boundary are the *reclassified* TACS-1/2/3 segments -- TACS-1 replaces (not overlays) the TACS-2/3 segments it demotes, and Unclassified stretches produce a gap with no polyline.
 
+### Window Analysis (alignment + dominant orientation)
+
+The workflow can additionally aggregate per-pixel fiber orientations into a
+grid of square **windows** spanning the analysed region. Each window summarises
+its fibers with two scalars:
+
+- **Order parameter** (axial, `OS = sqrt(<cos 2theta>^2 + <sin 2theta>^2)`,
+  range 0-1) -- 0 = isotropic, 1 = perfectly aligned.
+- **Dominant orientation** (0-180 deg) -- circular mean angle.
+
+Two heatmaps are written next to `results.json`:
+
+- `alignment_overlay.png` -- viridis colormap on the order parameter, opaque
+  only where the window contains enough valid fibers.
+- `orientation_overlay.png` -- HSV ramp on the dominant orientation, with
+  saturation gated by the order parameter so nearly-isotropic windows fade
+  toward grey.
+
+Both are shown via per-annotation **Show alignment** and **Show window
+orientation** buttons in the results panel (same overlay slot as the
+pixel-wise heatmap below -- only one is visible at a time).
+
+When **Create per-window detection objects** is on, the workflow also adds one
+rectangular `PathDetectionObject` per non-empty window with these measurements:
+
+| Measurement | Meaning |
+|---|---|
+| Window mean angle (deg) | Dominant orientation 0-180 |
+| Window order parameter  | Alignment scalar 0-1 |
+| Window valid pixels     | Number of fiber-valid pixels inside the window |
+| Perp. parent            | Index of the parent annotation |
+
+Parameters (all in the **Window Analysis** section of the analysis dialog,
+persisted across sessions):
+
+| Parameter | Default | Notes |
+|---|---|---|
+| **Enable moving-window alignment** | on | Master switch. With it off, no overlays or objects are produced. |
+| **Window size (um)** | 15 | Side length of each square window. Window pixel count grows as the square of this value; very small windows (< 5 um) produce noisy statistics; very large windows smooth over structural detail. |
+| **Window overlap (%)** | 0 | 0 = non-overlapping tiles. 50 = half-overlap. Higher overlap produces denser grids (more objects, smoother heatmaps) but slower analysis. |
+| **Create per-window detection objects** | off | Off by default because at 15 um windows on a typical region, a few thousand objects can be created. |
+
+This is an **extension beyond** the PS-TACS paper -- the paper scores along the
+user-drawn boundary, not on a moving-window grid. The window definitions and
+metric (axial order parameter) are our own; cite as such.
+
 ### Pixel-wise Orientation Overlay
 
 Every analysed annotation now writes a `deviation_overlay.png` next to its
@@ -171,6 +217,13 @@ in case you want to do further analysis without re-running QuPath:
 | `zone_mask.npy` | (H, W) bool | Interrogation zone (between annotation and dilation/erosion edge). |
 | `dist_from_boundary.npy` | (H, W) float | Euclidean distance to the nearest boundary pixel, in image pixels. |
 | `normal_angle_deg.npy` | (H, W) float | Local outward-normal angle (from the distance-transform gradient) 0-180 deg. |
+
+When window analysis is enabled, two additional files are written:
+
+| File | Contents |
+|---|---|
+| `window_metrics.npz` | Full per-window numpy arrays: `mean_angle_deg`, `order_parameter`, `n_pixels`, `centers_px`, plus scalar metadata (`window_px`, `stride_px`, `min_pixels`). |
+| `windows.json` | Per-window records for non-numpy consumers. Each entry has top-left `x`/`y`, `w`/`h`, `mean_angle_deg`, `order_parameter`, `n_pixels`. |
 
 ### Saving results
 

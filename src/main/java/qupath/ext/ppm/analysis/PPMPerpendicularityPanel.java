@@ -156,20 +156,46 @@ public class PPMPerpendicularityPanel extends VBox {
         statusLabel.setText(status);
     }
 
+    private static void addOverlayButton(
+            HBox headerLine, String label, Path pngPath, OverlayInfo overlay, int index, String slot) {
+        if (pngPath == null) {
+            return;
+        }
+        Button btn = new Button(label);
+        btn.setOnAction(e -> {
+            String token = "annotation_" + index + ":" + slot;
+            PPMOrientationOverlayController.getInstance()
+                    .show(pngPath, overlay.offsetX, overlay.offsetY, overlay.regionW, overlay.regionH, token);
+        });
+        headerLine.getChildren().add(btn);
+    }
+
     /**
-     * Per-annotation overlay descriptor. Lets the panel build a "Show
-     * orientation heatmap" button per annotation without coupling the panel
-     * to the workflow's internal data classes.
+     * Per-annotation overlay descriptor. Lets the panel build "Show ..."
+     * buttons per annotation without coupling the panel to the workflow's
+     * internal data classes. Any of the per-overlay PNG paths may be null,
+     * in which case the corresponding button is omitted.
      */
     public static final class OverlayInfo {
-        public final Path pngPath;
+        public final Path deviationPng;
+        public final Path alignmentPng;
+        public final Path windowOrientationPng;
         public final int offsetX;
         public final int offsetY;
         public final int regionW;
         public final int regionH;
 
-        public OverlayInfo(Path pngPath, int offsetX, int offsetY, int regionW, int regionH) {
-            this.pngPath = pngPath;
+        public OverlayInfo(
+                Path deviationPng,
+                Path alignmentPng,
+                Path windowOrientationPng,
+                int offsetX,
+                int offsetY,
+                int regionW,
+                int regionH) {
+            this.deviationPng = deviationPng;
+            this.alignmentPng = alignmentPng;
+            this.windowOrientationPng = windowOrientationPng;
             this.offsetX = offsetX;
             this.offsetY = offsetY;
             this.regionW = regionW;
@@ -192,26 +218,27 @@ public class PPMPerpendicularityPanel extends VBox {
         annotationBox.setPadding(new Insets(8));
         annotationBox.setStyle("-fx-border-color: #cccccc; -fx-border-radius: 4;");
 
-        // Header with optional "Show orientation overlay" button on the right.
+        // Header with optional "Show ..." overlay buttons on the right.
         Label header = new Label(String.format("Annotation %d/%d: %s", index, totalAnnotations, annotationName));
         header.setFont(Font.font("System", FontWeight.BOLD, 12));
-        if (overlay != null) {
+        boolean anyOverlay = overlay != null
+                && (overlay.deviationPng != null
+                        || overlay.alignmentPng != null
+                        || overlay.windowOrientationPng != null);
+        if (anyOverlay) {
             Region headerInnerSpacer = new Region();
             HBox.setHgrow(headerInnerSpacer, Priority.ALWAYS);
-            Button overlayBtn = new Button("Show orientation overlay");
-            overlayBtn.setOnAction(e -> {
-                String token = "annotation_" + index;
-                PPMOrientationOverlayController.getInstance()
-                        .show(
-                                overlay.pngPath,
-                                overlay.offsetX,
-                                overlay.offsetY,
-                                overlay.regionW,
-                                overlay.regionH,
-                                token);
-            });
-            HBox headerLine = new HBox(8, header, headerInnerSpacer, overlayBtn);
+            HBox headerLine = new HBox(8, header, headerInnerSpacer);
             headerLine.setAlignment(Pos.CENTER_LEFT);
+            addOverlayButton(headerLine, "Show orientation overlay", overlay.deviationPng, overlay, index, "deviation");
+            addOverlayButton(headerLine, "Show alignment", overlay.alignmentPng, overlay, index, "alignment");
+            addOverlayButton(
+                    headerLine,
+                    "Show window orientation",
+                    overlay.windowOrientationPng,
+                    overlay,
+                    index,
+                    "window_orientation");
             annotationBox.getChildren().add(headerLine);
         } else {
             annotationBox.getChildren().add(header);
