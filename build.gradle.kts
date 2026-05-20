@@ -54,8 +54,9 @@ dependencies {
 
     // For testing
     testImplementation(libs.bundles.qupath)
-    testImplementation("io.github.qupath:qupath-app:0.6.0-rc4")
-    testImplementation("org.junit.jupiter:junit-jupiter:5.9.1")
+    testImplementation("io.github.qupath:qupath-app:0.7.0")
+    testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.13.4")
     testImplementation("org.assertj:assertj-core:3.24.2")
     testImplementation(libs.bundles.logging)
     testImplementation(libs.qupath.fxtras)
