@@ -1,5 +1,6 @@
 package qupath.ext.ppm;
 
+import javafx.application.Platform;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
@@ -42,6 +43,15 @@ public class SetupPPM implements QuPathExtension, GitHubProject {
     private static final GitHubRepo EXTENSION_REPOSITORY =
             GitHubRepo.create(EXTENSION_NAME, "uw-loci", "qupath-extension-ppm");
 
+    // Sentinel class used to probe whether QPSC is on the classpath. Every analysis
+    // workflow in this extension imports ImageMetadataManager, so if it cannot be
+    // resolved none of the menu items would work and clicking them would throw a
+    // NoClassDefFoundError that ends up in QuPath's uncaught-exception handler
+    // instead of in front of the user.
+    private static final String QPSC_SENTINEL_CLASS = "qupath.ext.qpsc.utilities.ImageMetadataManager";
+    private static final String QPSC_CATALOG_URL = "https://github.com/uw-loci/qupath-catalog-qpsc";
+    private static final String QPSC_RELEASES_URL = "https://github.com/uw-loci/qupath-extension-qpsc/releases";
+
     @Override
     public String getName() {
         return EXTENSION_NAME;
@@ -67,6 +77,20 @@ public class SetupPPM implements QuPathExtension, GitHubProject {
         String extVersion = GeneralTools.getPackageVersion(SetupPPM.class);
         logger.info("Installing PPM Analysis extension v{}", extVersion != null ? extVersion : "dev");
 
+        // Every analysis workflow links against QPSC utility classes (ImageMetadataManager,
+        // DocumentationHelper, AffineTransformManager, ForwardPropagationWorkflow). If QPSC
+        // is not installed, the menu items would silently throw NoClassDefFoundError when
+        // clicked. Detect the missing dependency up front and surface a clear message.
+        if (!isQPSCAvailable()) {
+            logger.error(
+                    "QPSC extension not found on classpath (probed {}). "
+                            + "PPM Analysis menus will be replaced with an install-QPSC placeholder.",
+                    QPSC_SENTINEL_CLASS);
+            installMissingDependencyMenu(qupath);
+            Platform.runLater(SetupPPM::showMissingQPSCDialog);
+            return;
+        }
+
         // Add analysis menus under Extensions > PPM Analysis
         Menu extensionsMenu = qupath.getMenu("Extensions", true);
         Menu ppmMenu = new Menu("PPM Analysis");
@@ -87,6 +111,46 @@ public class SetupPPM implements QuPathExtension, GitHubProject {
         extensionsMenu.getItems().add(ppmMenu);
 
         logger.info("PPM Analysis menus registered under Extensions > PPM Analysis");
+    }
+
+    private static boolean isQPSCAvailable() {
+        try {
+            // initialize=false so we don't run QPSC's static initializers as a side-effect
+            // of the probe -- we just want to know whether the class is resolvable.
+            Class.forName(QPSC_SENTINEL_CLASS, false, SetupPPM.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException | NoClassDefFoundError e) {
+            return false;
+        }
+    }
+
+    private static void installMissingDependencyMenu(QuPathGUI qupath) {
+        Menu extensionsMenu = qupath.getMenu("Extensions", true);
+        Menu ppmMenu = new Menu("PPM Analysis");
+        MenuItem installItem = new MenuItem("Install QPSC extension (required)...");
+        installItem.setOnAction(e -> showMissingQPSCDialog());
+        ppmMenu.getItems().add(installItem);
+        extensionsMenu.getItems().add(ppmMenu);
+    }
+
+    private static void showMissingQPSCDialog() {
+        String msg = "PPM Analysis requires the QPSC extension, which is not installed.\n\n"
+                + "All PPM analysis tools (hue range, polarity plot, perpendicularity, "
+                + "batch analysis, back-propagation) depend on shared utilities that live "
+                + "in QPSC.\n\n"
+                + "To fix this:\n"
+                + "  1. Open Extensions > Manage extensions.\n"
+                + "  2. Add the QPSC catalog:\n"
+                + "       " + QPSC_CATALOG_URL + "\n"
+                + "  3. Install \"QuPath Scope (QPSC)\" from the catalog.\n"
+                + "  4. Restart QuPath.\n\n"
+                + "Or download the QPSC jar directly:\n"
+                + "  " + QPSC_RELEASES_URL + "\n"
+                + "and drop it into your QuPath extensions folder.\n\n"
+                + "(On a workstation without a microscope, QPSC will warn about a missing "
+                + "configuration at startup -- that is expected; PPM analysis menus will "
+                + "still work.)";
+        qupath.fx.dialogs.Dialogs.showErrorMessage("PPM Analysis - Missing Dependency", msg);
     }
 
     private static MenuItem createMenuItem(String text, Runnable action) {
