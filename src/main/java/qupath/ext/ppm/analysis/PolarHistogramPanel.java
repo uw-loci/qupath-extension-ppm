@@ -88,6 +88,20 @@ public class PolarHistogramPanel extends VBox {
         updateStats();
     }
 
+    /** Clears the canvas and shows a "preparing N objects..." message before the loop starts. */
+    public void showRunning(int total) {
+        this.histogramCounts = null;
+        this.bins = 0;
+        canvas.getGraphicsContext2D().clearRect(0, 0, canvas.getWidth(), canvas.getHeight());
+        statsLabel.setText("Preparing " + total + " object" + (total == 1 ? "" : "s") + "...");
+        titleLabel.setText("PPM Polarity Plot - running");
+    }
+
+    /** Progress tick during the per-object loop. */
+    public void showProgress(int current, int total) {
+        statsLabel.setText("Processing object " + current + " of " + total + "...");
+    }
+
     private void render() {
         GraphicsContext gc = canvas.getGraphicsContext2D();
         double w = canvas.getWidth();
@@ -205,7 +219,7 @@ public class PolarHistogramPanel extends VBox {
         StringBuilder sb = new StringBuilder();
 
         if (annotationName != null && !annotationName.isEmpty()) {
-            sb.append("Annotation: ").append(annotationName).append("\n");
+            sb.append(annotationName).append("\n");
         }
 
         sb.append(String.format("Valid pixels:     %,d%n", validPixels));
@@ -245,6 +259,9 @@ public class PolarHistogramPanel extends VBox {
         }
 
         statsLabel.setText(sb.toString());
-        titleLabel.setText(annotationName != null ? "PPM Polarity Plot - " + annotationName : "PPM Polarity Plot");
+        titleLabel.setText(
+                annotationName != null && !annotationName.isEmpty()
+                        ? "PPM Polarity Plot - " + annotationName
+                        : "PPM Polarity Plot");
     }
 }

@@ -6,21 +6,40 @@
 
 ## Purpose
 
-Computes and displays a polarity rose diagram (polar histogram) for the selected annotation, showing the distribution of fiber orientation angles within that region. Includes circular statistics (mean direction, circular standard deviation, resultant length) that quantify the degree and direction of fiber alignment.
+Computes per-object polarity (orientation distribution) for a user-chosen set of annotations or detections, writes the circular statistics back onto each object as measurements, and displays a combined polar histogram (rose diagram) in the dialog. Useful for verifying alignment per object (e.g. PPM-segmented fiber detections) and for comparing aligned populations.
 
 ## Prerequisites
 
 1. **Completed [Sunburst Calibration](ppm-reference-slide.md)** -- The hue-to-angle calibration (.npz) must exist. This maps HSV hue values to fiber orientation angles.
-2. **PPM birefringence or sum image open** -- Open a post-processed PPM image (not a raw angle image). The image must not have saturated pixels, as overexposure corrupts hue values and produces incorrect angle measurements.
-3. **Annotation selected** -- Select an annotation in QuPath to define the region of interest for the polarity analysis.
+2. **A PPM color (angle) image open** -- Open a post-processed PPM image (not the birefringence grayscale). The image must not have saturated pixels, as overexposure corrupts hue values and produces incorrect angle measurements.
+3. **Objects to analyze** -- One or more annotations or detections in the hierarchy. They may be unclassified; the dialog lists all classes present so you can include or exclude any subset.
 
 ## How It Works
 
-1. Reads the PPM image data within the selected annotation boundary
-2. Converts each pixel's HSV hue to an orientation angle using the active calibration
-3. Filters out pixels below the birefringence threshold (non-birefringent background)
-4. Bins the remaining angles into a histogram (default: 18 bins of 10 deg each)
-5. Displays the result as a semi-circular rose diagram (0-180 deg)
+1. Opens a small **object-selection dialog** offering three choices:
+   - Use current selection (only enabled when objects are selected)
+   - All annotations, filtered by class (multi-select)
+   - All detections, filtered by class (multi-select)
+2. Iterates over the resolved object list, and for each object:
+   - Reads the PPM image data within the object's ROI
+   - Converts each pixel's HSV hue to an orientation angle using the active calibration
+   - Filters out pixels below the birefringence threshold (non-birefringent background)
+   - Bins the remaining angles into a histogram (default: 18 bins of 10 deg each)
+   - Writes per-object measurements back to the object's measurement list (see below)
+3. Sums histograms across all processed objects and combines per-object circular statistics into population-level mean / R / std for axial data
+4. Displays the aggregate result as a semi-circular rose diagram (0-180 deg) with the object count and class breakdown in the title
+
+### Per-object measurements written
+
+Each processed object receives the following measurements (visible in QuPath's measurement table, exportable as TSV):
+
+| Measurement | Meaning |
+|-------------|---------|
+| `PPM Polarity: Mean angle (deg)` | Circular mean orientation for this object |
+| `PPM Polarity: Circ std (deg)` | Circular standard deviation |
+| `PPM Polarity: Resultant length` | Alignment strength R (0 = random, 1 = perfectly aligned) |
+| `PPM Polarity: Valid pixels` | Pixel count that passed the biref threshold |
+| `PPM Polarity: Dominant bin center (deg)` | Centre of the highest-count histogram bin |
 
 ## Rose Diagram
 
@@ -57,6 +76,8 @@ The panel displays four key metrics:
 - **Two peaks 90 deg apart** -- Orthogonal fiber populations (e.g., woven tissue)
 - **Uniform distribution** -- Random/isotropic fiber organization
 - **Resultant length > 0.5** -- Strong alignment; < 0.2 is near-random
+
+The aggregate plot in the dialog is a histogram sum across all processed objects; the per-object measurements written to the measurement list let you filter or compare orientation behavior on a per-detection basis (useful once PPM segmentation has split tissue into many detection objects).
 
 ## Related Workflows
 
