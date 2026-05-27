@@ -112,11 +112,23 @@ Once calibrated, the analysis workflows are available:
 
 ## Installation
 
-1. Download `qupath-extension-ppm-0.2.0-all.jar` from the [latest release](https://github.com/uw-loci/qupath-extension-ppm/releases)
-2. Copy the JAR to your QuPath `extensions/` directory
-3. Restart QuPath
+### Prerequisites
+
+The PPM extension requires **qupath-extension-qpsc** to be installed first. All analysis workflows (hue range filter, polarity plot, perpendicularity, batch analysis, back-propagation) depend on shared utilities provided by QPSC.
+
+### Installation Steps
+
+1. **Install QPSC first** (if not already installed):
+   - Via extension catalog: Open **Extensions > Manage extensions**, add `https://github.com/uw-loci/qupath-catalog-qpsc`, and install "QuPath Scope (QPSC)"
+   - Or download directly from [uw-loci/qupath-extension-qpsc/releases](https://github.com/uw-loci/qupath-extension-qpsc/releases) and copy the JAR to your `extensions/` directory
+
+2. Download `qupath-extension-ppm-0.2.0-all.jar` from the [latest release](https://github.com/uw-loci/qupath-extension-ppm/releases)
+3. Copy the JAR to your QuPath `extensions/` directory
+4. Restart QuPath
 
 The PPM extension will add a **PPM Analysis** submenu under QuPath's **Extensions** menu. No microscope connection is required for analysis workflows.
+
+**If QPSC is missing:** When you launch QuPath without QPSC, a dialog will appear with instructions on how to install it. You can also click **Extensions > PPM Analysis > Install QPSC extension (required)...** at any time to see the installation instructions.
 
 ---
 
