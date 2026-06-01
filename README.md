@@ -15,6 +15,8 @@ It works with images from **Polychromatic Polarization Microscopy (PPM)**, a tec
 
 Analysis menus appear under **Extensions > PPM Analysis** and run on any workstation -- no microscope required -- so the same tools work for offline reanalysis of existing PPM datasets.
 
+![Overview of whole-slide PPM analyses in QuPath: per-microscope hue-to-orientation calibration (sunburst plot), collagen orientation by border region (parallel vs perpendicular fibers on the edges of an ROI), dominant orientation by axial circular statistics on a 15 um grid, and polarity judged from PPM pixel color.](documentation/images/ppm-analysis-overview.png)
+
 > **Hardware/acquisition workflows** (rotation control, calibration, angle selection) are provided by [qupath-extension-qpsc](https://github.com/uw-loci/qupath-extension-qpsc) in its `modality/ppm/` package. This extension does NOT register a modality handler or contain any hardware code.
 
 > **Reference:** Shribak, M. (2015). "Polychromatic polarization microscope: bringing colors to a colorless world." *Scientific Reports*, 5, 17340. [DOI: 10.1038/srep17340](https://doi.org/10.1038/srep17340)
