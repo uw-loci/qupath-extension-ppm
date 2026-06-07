@@ -1,7 +1,7 @@
 # QuPath PPM (Polychromatic Polarization Microscopy) Extension
 
 [![QuPath Version](https://img.shields.io/badge/qupath-0.7.0+-blue)](https://qupath.github.io/)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](#license)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue)](#license)
 [![Status](https://img.shields.io/badge/status-pre--release-orange)](#)
 
 > **Part of the QPSC (QuPath Scope Control) system**
@@ -212,7 +212,10 @@ For general support and feature requests, please post on the [image.sc forum](ht
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+This extension is derived from QuPath, which is available under the GPL v3. It subclasses
+QuPath's `AbstractOverlay` (the PPM hue-range overlay), so it is a derivative work and is
+therefore also licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE)
+file for details.
 
 ## AI-Assisted Development
 
