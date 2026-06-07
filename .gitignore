@@ -30,6 +30,12 @@ gradle.properties
 # Mac
 .DS_Store
 
+# Python (bytecode artifacts from the bundled Appose scripts; .py sources stay tracked)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
 # Java
 hs_err*.log
 
