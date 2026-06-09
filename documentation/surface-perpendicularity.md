@@ -178,6 +178,33 @@ This is an **extension beyond** the PS-TACS paper -- the paper scores along the
 user-drawn boundary, not on a moving-window grid. The window definitions and
 metric (axial order parameter) are our own; cite as such.
 
+#### Coloring windows by orientation (PPM Hue to Angle colormap)
+
+When **Create per-window detection objects** is on, the workflow also installs a
+custom colormap into QuPath's **Measurement Maps** feature
+(`View > Show measurement maps`), named **PPM Hue to Angle (&lt;angle&gt; deg)** --
+e.g. `PPM Hue to Angle (-7 deg)`, where the angle is the acquisition angle read
+from the open image's `angle` metadata.
+
+This colormap is built from the **active hue-to-angle calibration**: each angle is
+mapped through the calibration to the hue the PPM image would show for that fiber
+orientation, then rendered as a fully saturated color. The result is **cyclic**
+(0 deg and 180 deg meet), matching the 180-periodicity of fiber orientation, so
+coloring the `Window mean angle (deg)` measurement with it reproduces the hues you
+see in the source PPM image rather than an arbitrary perceptual ramp (Viridis, etc.).
+
+To use it:
+
+1. Run the analysis with **Create per-window detection objects** enabled.
+2. Open **Measurement Maps** and choose `Window mean angle (deg)` as the measurement.
+3. Select **PPM Hue to Angle (...)** from the colormap dropdown.
+4. Set the display **range to 0-180** so the colors line up with true fiber angles.
+
+> Note: the Measurement Maps pane reads the list of colormaps when it opens. If the
+> pane was already open before you ran the analysis, close and reopen it (or reopen
+> the colormap dropdown) for the new entry to appear. Re-running the analysis with a
+> different calibration or angle replaces the entry of the same name.
+
 ### Pixel-wise Orientation Overlay
 
 Every analysed annotation now writes a `deviation_overlay.png` next to its

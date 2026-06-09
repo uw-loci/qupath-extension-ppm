@@ -1121,6 +1121,20 @@ public class PPMPerpendicularityWorkflow {
 
                     List<PathObject> allTacsPolylines = new ArrayList<>();
 
+                    // When per-window detections are created, install a measurement-map
+                    // colormap that reproduces the PPM hue wheel from the active calibration,
+                    // so "Window mean angle (deg)" can be colored to match the source image
+                    // (set the measurement map's display range to 0-180). Installed once per run.
+                    if (windowCreateObjects) {
+                        PPMCalibration colorMapCal = PPMAnalysisService.loadCalibration(calibrationPath);
+                        if (colorMapCal != null) {
+                            String rawAngle = currentEntry != null
+                                    ? currentEntry.getMetadata().get(ImageMetadataManager.ANGLE)
+                                    : null;
+                            PPMHueColorMap.install(colorMapCal, formatAngleLabel(rawAngle));
+                        }
+                    }
+
                     for (int i = 0; i < matchingAnnotations.size(); i++) {
                         PathObject annotation = matchingAnnotations.get(i);
                         String annotationName = annotation.getDisplayedName();
@@ -2016,6 +2030,27 @@ public class PPMPerpendicularityWorkflow {
      * mean angle, order parameter, and valid-pixel count are attached as
      * measurements so they show up in QuPath's measurement table.
      */
+    /**
+     * Formats the image's acquisition-angle metadata into a short label like "-7 deg"
+     * for the PPM hue colormap name. A numeric angle is rendered without a trailing
+     * ".0"; a non-numeric value (e.g. a named role) is used verbatim. Returns null when
+     * no usable angle is recorded.
+     */
+    private static String formatAngleLabel(String rawAngle) {
+        if (rawAngle == null || rawAngle.isBlank()) {
+            return null;
+        }
+        String trimmed = rawAngle.trim();
+        try {
+            double deg = Double.parseDouble(trimmed);
+            String num = (deg == Math.rint(deg)) ? Long.toString((long) deg) : Double.toString(deg);
+            return num + " deg";
+        } catch (NumberFormatException e) {
+            // Non-numeric angle metadata (e.g. a named role) -- use as-is.
+            return trimmed;
+        }
+    }
+
     private static List<PathObject> createWindowDetections(
             Path windowsJsonPath, int offsetX, int offsetY, int annotationIndex) {
         List<PathObject> out = new ArrayList<>();

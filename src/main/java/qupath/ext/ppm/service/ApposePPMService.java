@@ -42,6 +42,11 @@ public class ApposePPMService {
 
     private static final String RESOURCE_BASE = "qupath/ext/ppm/";
     private static final String PIXI_TOML_RESOURCE = RESOURCE_BASE + "pixi.toml";
+    // Bundled lockfile pinning the full transitive dependency tree. Installed
+    // with --frozen so updates install the exact tested versions instead of
+    // re-resolving against current conda-forge/PyPI. Regenerate via
+    // tools/regen-pixi-lock.sh when pixi.toml changes.
+    private static final String PIXI_LOCK_RESOURCE = RESOURCE_BASE + "pixi.lock";
     private static final String SCRIPTS_BASE = RESOURCE_BASE + "scripts/";
     private static final String ENV_NAME = "ppm-analysis";
 
@@ -159,6 +164,7 @@ public class ApposePPMService {
             logger.info("Initializing PPM Appose environment...");
 
             String pixiToml = loadResource(PIXI_TOML_RESOURCE);
+            String pixiLock = loadResource(PIXI_LOCK_RESOURCE);
 
             // ALL Appose operations require the extension classloader as TCCL.
             // Appose and its dependencies use ServiceLoader internally.
@@ -166,8 +172,9 @@ public class ApposePPMService {
             Thread.currentThread().setContextClassLoader(ApposePPMService.class.getClassLoader());
 
             try {
-                // Sync pixi.toml: detect version changes
-                syncPixiToml(pixiToml);
+                // Sync manifest + lock; the lock is staged so the install below
+                // can run --frozen (exact pinned versions, no re-resolution).
+                syncManifest(pixiToml, pixiLock);
 
                 report(statusCallback, "Building pixi environment (this may take several minutes)...");
 
@@ -471,10 +478,11 @@ public class ApposePPMService {
                     + "Try PPM > Rebuild PPM Analysis Environment.");
         }
 
-        // Run "pixi install" to resolve all conda dependencies
-        logger.info("Running pixi install to resolve dependencies...");
+        // Install conda dependencies strictly from the bundled lockfile:
+        // --frozen installs the exact pinned versions and never re-resolves.
+        logger.info("Running pixi install --frozen from the bundled lock...");
         report(statusCallback, "Installing Python dependencies (this may take several minutes on first run)...");
-        runPixiCommand(pixi, envBase, manifestPath, "install");
+        runPixiCommand(pixi, envBase, manifestPath, "install", "--frozen");
 
         // ppm_library >= 1.3.2 imports microscope_imageprocessing at module
         // load time, so it must be installed first. Neither package is on
@@ -616,25 +624,46 @@ public class ApposePPMService {
     }
 
     /**
-     * Ensures the pixi.toml on disk matches the bundled content.
-     * If different, overwrites and deletes pixi.lock + .pixi/ to force rebuild.
+     * Sync the on-disk pixi.toml AND pixi.lock with the JAR-bundled versions.
+     * The lock pins the full dependency tree and the env installs with
+     * --frozen, so the lock must be staged into the env dir before install:
+     * first run stages the lock (Appose writes the manifest); a change to
+     * either file rewrites both and wipes .pixi/ for a clean reinstall from the
+     * new lock; otherwise the lock is re-staged if a prior wipe removed it.
      */
-    private void syncPixiToml(String expectedContent) {
+    private void syncManifest(String expectedToml, String expectedLock) {
         try {
             Path envDir = getEnvironmentPath();
-            Path pixiTomlFile = envDir.resolve("pixi.toml");
-            if (!Files.exists(pixiTomlFile)) {
-                return; // First-time install
-            }
-            String existingContent = Files.readString(pixiTomlFile, StandardCharsets.UTF_8);
-            String normalizedExisting = existingContent.replace("\r\n", "\n").strip();
-            String normalizedExpected = expectedContent.replace("\r\n", "\n").strip();
-            if (normalizedExisting.equals(normalizedExpected)) {
+            Path tomlFile = envDir.resolve("pixi.toml");
+            Path lockFile = envDir.resolve("pixi.lock");
+
+            if (!Files.exists(tomlFile)) {
+                Files.createDirectories(envDir);
+                Files.writeString(lockFile, expectedLock, StandardCharsets.UTF_8);
                 return;
             }
-            logger.info("pixi.toml content changed - updating and forcing environment rebuild");
-            Files.writeString(pixiTomlFile, expectedContent, StandardCharsets.UTF_8);
-            Files.deleteIfExists(envDir.resolve("pixi.lock"));
+
+            String onToml = Files.readString(tomlFile, StandardCharsets.UTF_8)
+                    .replace("\r\n", "\n")
+                    .strip();
+            String exToml = expectedToml.replace("\r\n", "\n").strip();
+            String onLock = Files.exists(lockFile)
+                    ? Files.readString(lockFile, StandardCharsets.UTF_8)
+                            .replace("\r\n", "\n")
+                            .strip()
+                    : "";
+            String exLock = expectedLock.replace("\r\n", "\n").strip();
+
+            if (onToml.equals(exToml) && onLock.equals(exLock)) {
+                if (!Files.exists(lockFile)) {
+                    Files.writeString(lockFile, expectedLock, StandardCharsets.UTF_8);
+                }
+                return;
+            }
+
+            logger.info("pixi manifest/lock changed - updating and forcing environment rebuild");
+            Files.writeString(tomlFile, expectedToml, StandardCharsets.UTF_8);
+            Files.writeString(lockFile, expectedLock, StandardCharsets.UTF_8);
             // Delete .pixi/ so Appose doesn't skip the build.
             // On Windows, files may be locked -- use rename-then-delete fallback.
             Path pixiDir = envDir.resolve(".pixi");
@@ -656,9 +685,9 @@ public class ApposePPMService {
                     }
                 }
             }
-            logger.info("Environment sync complete - next build will re-resolve dependencies");
+            logger.info("Environment sync complete - next build will install from the bundled lock");
         } catch (IOException e) {
-            logger.warn("Failed to sync pixi.toml (will attempt build anyway): {}", e.getMessage());
+            logger.warn("Failed to sync pixi manifest/lock (will attempt build anyway): {}", e.getMessage());
         }
     }
 
