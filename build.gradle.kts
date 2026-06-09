@@ -13,7 +13,7 @@ plugins {
 qupathExtension {
     name = "qupath-extension-ppm"
     group = "io.github.uw-loci"
-    version = "0.2.0"
+    version = "0.2.1"
     description = "Polarized light microscopy (PPM) modality extension for QuPath/QPSC"
     automaticModule = "io.github.uw.loci.extension.ppm"
 }
@@ -71,9 +71,24 @@ tasks.shadowJar {
 
 // For troubleshooting deprecation warnings
 tasks.withType<JavaCompile> {
-    options.release.set(21) // QuPath 0.7 runs on Java 21; pin bytecode target so any build JDK emits loadable classes
+    // Emit Java 21 bytecode (class 65) so the jar loads on QuPath 0.7's Java 21 runtime,
+    // regardless of the build JDK.
+    options.release.set(21)
     options.compilerArgs.add("-Xlint:deprecation")
     options.compilerArgs.add("-Xlint:unchecked")
+}
+
+// QuPath 0.7.0's maven artifacts are published as requiring JVM 25 (org.gradle.jvm.version=25),
+// even though the QuPath app runs on Java 21. options.release=21 above makes Gradle resolve a
+// JVM-21-compatible classpath, which then rejects those JVM-25 artifacts. Force the resolution
+// classpaths to request JVM 25 so the deps resolve; the bytecode target (21) is unaffected, so
+// the jar still loads on Java 21. (Upstream QuPath metadata bug; remove if/when fixed.)
+configurations.configureEach {
+    if (isCanBeResolved) {
+        attributes {
+            attribute(org.gradle.api.attributes.java.TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 25)
+        }
+    }
 }
 
 tasks.test {
