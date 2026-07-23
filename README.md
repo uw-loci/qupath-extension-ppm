@@ -83,6 +83,8 @@ Analysis menus appear under **Extensions > PPM Analysis** and run on any worksta
 
 Detailed guides for each workflow are in the [`documentation/`](documentation/) folder. Each guide includes prerequisites, step-by-step instructions, parameter descriptions, and troubleshooting tips.
 
+**Start here:** the **[PPM: Setup and Use guide](documentation/ppm-setup-and-use.md)** is the end-to-end overview -- it walks calibration -> camera/white-balance/background -> acquisition -> analysis and links each detailed guide in order.
+
 All dialogs include a **?** help button that opens the corresponding documentation page in your browser.
 
 ### Recommended Workflow Order
