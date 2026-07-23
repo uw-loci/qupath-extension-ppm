@@ -39,7 +39,7 @@ public class SetupPPM implements QuPathExtension, GitHubProject {
     private static final String EXTENSION_DESCRIPTION = "Polarized light microscopy (PPM) image analysis for QuPath. "
             + "Provides hue range filtering, polarity plots, surface perpendicularity, "
             + "and batch analysis tools for PPM images.";
-    private static final Version EXTENSION_QUPATH_VERSION = Version.parse("v0.6.0");
+    private static final Version EXTENSION_QUPATH_VERSION = Version.parse("v0.7.0");
     private static final GitHubRepo EXTENSION_REPOSITORY =
             GitHubRepo.create(EXTENSION_NAME, "uw-loci", "qupath-extension-ppm");
 
