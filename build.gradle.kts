@@ -13,7 +13,7 @@ plugins {
 qupathExtension {
     name = "qupath-extension-ppm"
     group = "io.github.uw-loci"
-    version = "0.2.1"
+    version = "0.2.2"
     description = "Polarized light microscopy (PPM) modality extension for QuPath/QPSC"
     automaticModule = "io.github.uw.loci.extension.ppm"
 }
@@ -50,7 +50,7 @@ dependencies {
     shadow("io.github.uw-loci:qupath-extension-qpsc:0.4.2")
 
     // Appose -- embedded Python environment for PPM analysis (ppm_library)
-    implementation("org.apposed:appose:0.10.0")
+    implementation("org.apposed:appose:0.12.0")
 
     // For testing
     testImplementation(libs.bundles.qupath)
