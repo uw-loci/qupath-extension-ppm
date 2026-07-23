@@ -40,7 +40,6 @@ import qupath.lib.regions.RegionRequest;
  * @author Mike Nelson
  * @since 1.0
  * @see PPMCalibration
- * @see qupath.ext.qpsc.utilities.ImageMetadataManager#findPPMAnalysisSet
  */
 public class PPMAnalysisService {
 
