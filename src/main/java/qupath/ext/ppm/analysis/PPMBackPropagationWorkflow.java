@@ -249,7 +249,8 @@ public class PPMBackPropagationWorkflow {
                 return g;
             });
 
-            if (ImageMetadataManager.isFlipped(entry)) {
+            boolean[] entryParity = ImageMetadataManager.bakedParity(entry);
+            if (entryParity[0] || entryParity[1]) {
                 group.flippedParent = entry;
                 group.sampleName = ImageMetadataManager.getSampleName(entry);
                 String origId = ImageMetadataManager.getOriginalImageId(entry);
@@ -372,8 +373,9 @@ public class PPMBackPropagationWorkflow {
             // Build stage -> target transform (with optional flip to original)
             AffineTransform stageToTarget;
             if (applyFlip) {
-                boolean flipX = ImageMetadataManager.isFlippedX(group.flippedParent);
-                boolean flipY = ImageMetadataManager.isFlippedY(group.flippedParent);
+                boolean[] parity = ImageMetadataManager.bakedParity(group.flippedParent);
+                boolean flipX = parity[0];
+                boolean flipY = parity[1];
                 int w = targetData.getServer().getWidth();
                 int h = targetData.getServer().getHeight();
                 // Use QPSC's createFlip utility
