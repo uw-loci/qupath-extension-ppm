@@ -298,6 +298,12 @@ try:
 
     # Remove small connected components (area threshold)
     if min_area > 0:
+        # NOTE: max_size= requires scikit-image >= 0.26. The committed pixi.lock
+        # pins 0.26.0 so this is satisfied for every user, but pixi.toml still
+        # declares >=0.21.0. Raise that floor at the next release that can afford
+        # an environment rebuild -- changing pixi.toml wipes .pixi/ and forces a
+        # full ~500 MB reinstall, which is not worth it for a bound the lock
+        # already guarantees.
         analysis_mask = remove_small_objects(analysis_mask, max_size=min_area)
 
     final_valid_count = int(np.count_nonzero(analysis_mask))
