@@ -72,20 +72,38 @@ public class ApposePPMService {
      * Minimum required ppm-library version for this extension version.
      * <p>IMPORTANT: Update this constant whenever ppm_library changes
      * affect the extension (new parameters, API changes, bug fixes).
-     * The extension will auto-upgrade ppm_library if the installed
-     * version is older than this.</p>
+     * Every initialize() runs "pip install --upgrade" for ppm_library, so an
+     * online session picks up a newer GitHub main automatically; this constant
+     * is the floor the result is then checked against.</p>
      */
     private static final String REQUIRED_PPM_VERSION = "1.3.5";
+
+    /**
+     * Appose's failure signature for a stale worker. The worker emits this
+     * BEFORE any Python runs, then Appose relaunches the task as an
+     * unobservable zombie inside the same worker -- so recovery means
+     * restarting the worker, not simply resubmitting the task.
+     */
+    private static final String THREAD_DEATH_SIGNATURE = "thread death";
 
     private static ApposePPMService instance;
 
     private Environment environment;
-    private Service pythonService;
-    private boolean initialized;
+    // Read outside the synchronized methods by runTask()/isAvailable(); a
+    // restart swaps the reference, so readers must not see a stale one.
+    private volatile Service pythonService;
+    private volatile boolean initialized;
     private boolean versionCompatible;
     private String installedPpmVersion;
-    private String initError;
+    private volatile String initError;
     private Thread shutdownHook;
+
+    /**
+     * Why the most recent package install failed, or null if every install step
+     * succeeded. Lets the version check say whether an outdated ppm_library is a
+     * download failure or an upstream branch that simply has not been bumped.
+     */
+    private String lastInstallFailure;
 
     private ApposePPMService() {}
 
@@ -155,7 +173,19 @@ public class ApposePPMService {
      */
     public synchronized void initialize(Consumer<String> statusCallback) throws IOException {
         if (initialized) {
-            report(statusCallback, "Already initialized");
+            // A previously-good session can still have lost its Python worker
+            // (Appose "thread death", an OS kill, an out-of-memory subprocess).
+            // Short-circuiting on the flag alone left every later task failing
+            // for the rest of the QuPath session, because callers re-check
+            // isAvailable() -- which was true -- and never re-initialized.
+            if (isWorkerAlive()) {
+                report(statusCallback, "Already initialized");
+                return;
+            }
+            logger.warn("PPM Python worker is no longer alive; restarting it (the pixi env is already built).");
+            report(statusCallback, "Restarting Python worker...");
+            restartWorker();
+            report(statusCallback, "Python worker restarted");
             return;
         }
 
@@ -227,8 +257,8 @@ public class ApposePPMService {
                 });
                 verifyTask.waitFor();
 
-                String ppmVersion = String.valueOf(verifyTask.outputs.get("ppm_version"));
-                String pythonInitError = String.valueOf(verifyTask.outputs.get("init_error"));
+                String ppmVersion = stringOutput(verifyTask, "ppm_version");
+                String pythonInitError = stringOutput(verifyTask, "init_error");
 
                 if (pythonInitError != null && !pythonInitError.isEmpty()) {
                     throw new IOException("Python init failed: " + pythonInitError);
@@ -237,52 +267,20 @@ public class ApposePPMService {
                 installedPpmVersion = ppmVersion;
                 logger.info("PPM environment verified: ppm_library {}", ppmVersion);
 
-                // Check if the installed version meets the minimum requirement.
-                // If not, auto-upgrade and restart the service.
+                // Check whether the installed version meets the minimum requirement.
+                // There is deliberately no retry here: installPPMLibrary() already
+                // ran "pip install --upgrade" moments ago in this same call, so
+                // re-running the identical command cannot change the answer. What
+                // matters instead is saying WHY the version is still too old.
                 if (!isVersionSufficient(ppmVersion, REQUIRED_PPM_VERSION)) {
-                    logger.warn(
-                            "ppm_library {} is older than required {}. Auto-upgrading...",
-                            ppmVersion,
-                            REQUIRED_PPM_VERSION);
-                    report(
-                            statusCallback,
-                            "Upgrading ppm_library (" + ppmVersion + " -> " + REQUIRED_PPM_VERSION + "+)...");
-
-                    // Shut down old service before upgrading
-                    if (pythonService != null) {
-                        pythonService.close();
-                        pythonService = null;
-                    }
-
-                    // Re-run pip install to get latest
-                    installPPMLibrary(statusCallback);
-
-                    // Restart service and re-verify
-                    pythonService = environment.python();
-                    pythonService.debug(msg -> {
-                        logger.info("[PPM Python] {}", msg);
-                        qupath.ext.ppm.ui.PythonConsoleWindow.appendMessage(msg);
-                    });
-                    pythonService.init("import numpy\n" + loadScript("init_ppm.py"));
-
-                    Task reverifyTask = pythonService.task(verifyScript);
-                    reverifyTask.waitFor();
-                    ppmVersion = String.valueOf(reverifyTask.outputs.get("ppm_version"));
-                    installedPpmVersion = ppmVersion;
-
-                    if (!isVersionSufficient(ppmVersion, REQUIRED_PPM_VERSION)) {
-                        logger.error(
-                                "ppm_library {} still does not meet required {} after upgrade",
-                                ppmVersion,
-                                REQUIRED_PPM_VERSION);
-                        versionCompatible = false;
-                        initError = "ppm_library " + ppmVersion + " is outdated. "
-                                + "Required: " + REQUIRED_PPM_VERSION + "+. "
-                                + "The GitHub main branch may not have been updated yet.";
-                    } else {
-                        logger.info("ppm_library upgraded to {}", ppmVersion);
-                        versionCompatible = true;
-                    }
+                    logger.error(
+                            "ppm_library {} does not meet the required {} floor", ppmVersion, REQUIRED_PPM_VERSION);
+                    versionCompatible = false;
+                    initError = "ppm_library " + ppmVersion + " is outdated. Required: " + REQUIRED_PPM_VERSION + "+. "
+                            + (lastInstallFailure != null
+                                    ? "The upgrade could not be installed: " + lastInstallFailure
+                                    : "The upgrade installed without error, so the GitHub main branch may not "
+                                            + "carry " + REQUIRED_PPM_VERSION + " yet.");
                 } else {
                     versionCompatible = true;
                 }
@@ -338,7 +336,22 @@ public class ApposePPMService {
     }
 
     /**
-     * Runs a named task script with the given inputs.
+     * Runs a named task script with the given inputs, recovering once from a
+     * stale Appose worker.
+     *
+     * <p>A worker that has gone idle emits Appose's "thread death" FAILURE on
+     * its next task <em>before any Python runs</em>. Appose then drops that task
+     * and relaunches it inside the same worker as an unobservable zombie (every
+     * later event hits "No such task"), so a plain resubmit would run the work
+     * twice. Recovery therefore has three parts:</p>
+     * <ol>
+     *   <li>restart the worker first, which kills the zombie relaunch;</li>
+     *   <li>retry only when no Python ever ran -- every PPM script emits an
+     *       UPDATE as soon as its imports succeed, and a failure after that
+     *       point is a real failure, not a stale worker;</li>
+     *   <li>log thread death at WARN (it is transient and recovered) and every
+     *       other failure at ERROR.</li>
+     * </ol>
      *
      * @param scriptName script name without .py extension
      * @param inputs     map of input values passed to the script
@@ -346,8 +359,33 @@ public class ApposePPMService {
      * @throws IOException if the service is not available or the task fails
      */
     public Task runTask(String scriptName, Map<String, Object> inputs) throws IOException {
-        ensureInitialized();
+        for (int attempt = 0; ; attempt++) {
+            ensureInitialized();
+            try {
+                return runTaskOnce(scriptName, inputs);
+            } catch (StaleWorkerException e) {
+                if (e.pythonStarted || attempt > 0) {
+                    throw e;
+                }
+                logger.warn(
+                        "PPM task '{}' hit Appose 'thread death' before any Python ran (stale worker). "
+                                + "Restarting the worker to kill the zombie relaunch, then retrying once.",
+                        scriptName);
+                try {
+                    restartWorker();
+                } catch (IOException restartError) {
+                    logger.error("Worker restart after thread death failed: {}", restartError.getMessage());
+                    throw e; // surface the original failure, not the restart's
+                }
+            }
+        }
+    }
 
+    /**
+     * Runs a task script exactly once. The retry decision lives in
+     * {@link #runTask(String, Map)}.
+     */
+    private Task runTaskOnce(String scriptName, Map<String, Object> inputs) throws IOException {
         String script;
         try {
             script = loadScript(scriptName + ".py");
@@ -355,16 +393,33 @@ public class ApposePPMService {
             throw new IOException("Failed to load task script: " + scriptName, e);
         }
 
+        // Set by the first UPDATE event. Every PPM script emits one as soon as
+        // its imports succeed, so "still false at failure time" means the worker
+        // died before running any of the script -- the only safe case to retry.
+        final boolean[] pythonStarted = {false};
+
         // TCCL must be set for Groovy JSON serialization and SharedMemory/NDArray ops
+        Service service = pythonService;
+        if (service == null) {
+            // A concurrent shutdown() or restartWorker() cleared it after
+            // ensureInitialized() passed.
+            throw new IOException("PPM task '" + scriptName + "' cannot run: the Python worker went away");
+        }
         ClassLoader original = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(ApposePPMService.class.getClassLoader());
         try {
-            Task task = pythonService.task(script, inputs);
+            Task task = service.task(script, inputs);
             task.listen(event -> {
-                if (event.responseType == ResponseType.CRASH) {
+                if (event.responseType == ResponseType.UPDATE) {
+                    pythonStarted[0] = true;
+                } else if (event.responseType == ResponseType.CRASH) {
                     logger.error("PPM task '{}' CRASH: {}", scriptName, task.error);
                 } else if (event.responseType == ResponseType.FAILURE) {
-                    logger.error("PPM task '{}' FAILURE: {}", scriptName, task.error);
+                    if (isThreadDeath(task.error)) {
+                        logger.warn("PPM task '{}' hit a stale Appose worker: {}", scriptName, task.error);
+                    } else {
+                        logger.error("PPM task '{}' FAILURE: {}", scriptName, task.error);
+                    }
                 }
             });
             task.waitFor();
@@ -373,9 +428,96 @@ public class ApposePPMService {
             Thread.currentThread().interrupt();
             throw new IOException("PPM task '" + scriptName + "' interrupted", e);
         } catch (TaskException e) {
-            throw new IOException("PPM task '" + scriptName + "' failed: " + e.getMessage(), e);
+            String message = "PPM task '" + scriptName + "' failed: " + e.getMessage();
+            if (isThreadDeath(e.getMessage())) {
+                throw new StaleWorkerException(message, e, pythonStarted[0]);
+            }
+            throw new IOException(message, e);
         } finally {
             Thread.currentThread().setContextClassLoader(original);
+        }
+    }
+
+    /**
+     * Recreates ONLY the Python worker subprocess, killing any stale or zombie
+     * worker first. The pixi environment is untouched -- it is already built, so
+     * this just spins up a fresh subprocess and re-runs {@code init_ppm.py}.
+     *
+     * @throws IOException if the environment is not built or the worker cannot
+     *                     be recreated
+     */
+    public synchronized void restartWorker() throws IOException {
+        if (environment == null) {
+            throw new IOException("Cannot restart worker: Appose environment not built");
+        }
+        ClassLoader original = Thread.currentThread().getContextClassLoader();
+        Thread.currentThread().setContextClassLoader(ApposePPMService.class.getClassLoader());
+        try {
+            // Tear the old worker down (close stdin for a clean exit, then kill).
+            Service stale = pythonService;
+            pythonService = null;
+            if (stale != null) {
+                try {
+                    stale.close();
+                    long deadline = System.currentTimeMillis() + 3000;
+                    while (stale.isAlive() && System.currentTimeMillis() < deadline) {
+                        Thread.sleep(50);
+                    }
+                    if (stale.isAlive()) {
+                        stale.kill();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    stale.kill();
+                } catch (Exception e) {
+                    logger.warn("Error tearing down stale PPM worker: {}", e.getMessage());
+                    try {
+                        stale.kill();
+                    } catch (Exception ignored) {
+                        // best effort
+                    }
+                }
+            }
+
+            Service fresh = environment.python();
+            fresh.debug(msg -> {
+                logger.info("[PPM Python] {}", msg);
+                qupath.ext.ppm.ui.PythonConsoleWindow.appendMessage(msg);
+            });
+            // "import numpy" first avoids a Windows deadlock (numpy/numpy#24290).
+            fresh.init("import numpy\n" + loadScript("init_ppm.py"));
+            // Appose starts the subprocess lazily, and a not-yet-started worker
+            // reports isAlive() == false -- which isAvailable() would read as
+            // dead. Start it here so the service is honestly available on return.
+            fresh.start();
+            pythonService = fresh;
+            logger.info("PPM Appose worker restarted (fresh Python subprocess)");
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("Failed to restart PPM Appose worker: " + e.getMessage(), e);
+        } finally {
+            Thread.currentThread().setContextClassLoader(original);
+        }
+    }
+
+    /** True when a task failure carries Appose's stale-worker signature. */
+    private static boolean isThreadDeath(String message) {
+        return message != null && message.toLowerCase().contains(THREAD_DEATH_SIGNATURE);
+    }
+
+    /**
+     * A task failure with Appose's "thread death" signature, carrying whether
+     * any Python ran before it -- which is what decides if a retry is safe.
+     */
+    private static class StaleWorkerException extends IOException {
+        private static final long serialVersionUID = 1L;
+
+        final boolean pythonStarted;
+
+        StaleWorkerException(String message, Throwable cause, boolean pythonStarted) {
+            super(message, cause);
+            this.pythonStarted = pythonStarted;
         }
     }
 
@@ -452,9 +594,28 @@ public class ApposePPMService {
 
     /**
      * Checks whether the service is initialized and available.
+     *
+     * <p>Includes a liveness check on the Python worker. Without it a worker
+     * that died mid-session still reported "available", so callers that guard
+     * re-initialization with {@code if (!isAvailable())} never recovered and
+     * every remaining task in the session failed.</p>
      */
     public boolean isAvailable() {
-        return initialized && initError == null && pythonService != null;
+        return initialized && initError == null && isWorkerAlive();
+    }
+
+    /**
+     * True when a Python worker subprocess exists and is still running.
+     *
+     * <p>Appose launches the subprocess lazily, so a worker that has been
+     * created but never run anything also reports not-alive. Both
+     * {@link #initialize(Consumer)} (via its verification task) and
+     * {@link #restartWorker()} force the subprocess to start before returning,
+     * so for callers this reduces to "the worker died".</p>
+     */
+    private boolean isWorkerAlive() {
+        Service service = pythonService;
+        return service != null && service.isAlive();
     }
 
     /**
@@ -486,6 +647,8 @@ public class ApposePPMService {
      * imports it at module load time.
      */
     private void installPPMLibrary(Consumer<String> statusCallback) throws IOException {
+        lastInstallFailure = null;
+
         Path envBase = Path.of(environment.base());
         Path manifestPath = envBase.resolve("pixi.toml");
 
@@ -496,24 +659,149 @@ public class ApposePPMService {
                     + "Try PPM > Rebuild PPM Analysis Environment.");
         }
 
+        // Both pip installs below pull from a GitHub tarball, so initialize()
+        // used to need live internet EVERY session -- an air-gapped microscope
+        // workstation or a GitHub outage made all four PPM menu items unusable
+        // even with the ~500 MB environment fully built. So: find out what is
+        // already installed first. If it already satisfies the floor, the whole
+        // install path becomes best-effort and PPM analysis runs offline.
+        String preinstalled = detectInstalledPpmVersion(pixi, envBase, manifestPath);
+        boolean alreadySatisfied = isVersionSufficient(preinstalled, REQUIRED_PPM_VERSION);
+        if (alreadySatisfied) {
+            logger.info(
+                    "ppm_library {} is already installed and meets the {} floor; "
+                            + "the install steps below are best-effort this session.",
+                    preinstalled,
+                    REQUIRED_PPM_VERSION);
+        }
+
         // Install conda dependencies strictly from the bundled lockfile:
         // --frozen installs the exact pinned versions and never re-resolves.
         logger.info("Running pixi install --frozen from the bundled lock...");
         report(statusCallback, "Installing Python dependencies (this may take several minutes on first run)...");
-        runPixiCommand(pixi, envBase, manifestPath, "install", "--frozen");
+        try {
+            runPixiCommand(pixi, envBase, manifestPath, "install", "--frozen");
+        } catch (IOException e) {
+            recordInstallFailure("pixi install", e, alreadySatisfied, preinstalled, statusCallback);
+        }
 
         // ppm_library >= 1.3.2 imports microscope_imageprocessing at module
         // load time, so it must be installed first. Neither package is on
         // PyPI, so both are pulled directly from GitHub tarballs.
-        pipInstallFromUrl(
-                pixi,
-                envBase,
-                manifestPath,
-                "microscope-imageprocessing",
-                MICROSCOPE_IMAGEPROCESSING_PIP_URL,
-                statusCallback);
+        try {
+            pipInstallFromUrl(
+                    pixi,
+                    envBase,
+                    manifestPath,
+                    "microscope-imageprocessing",
+                    MICROSCOPE_IMAGEPROCESSING_PIP_URL,
+                    statusCallback);
+        } catch (IOException e) {
+            recordInstallFailure(
+                    "microscope-imageprocessing install", e, alreadySatisfied, preinstalled, statusCallback);
+        }
 
-        pipInstallFromUrl(pixi, envBase, manifestPath, "ppm-library", PPM_LIBRARY_PIP_URL, statusCallback);
+        try {
+            pipInstallFromUrl(pixi, envBase, manifestPath, "ppm-library", PPM_LIBRARY_PIP_URL, statusCallback);
+        } catch (IOException e) {
+            recordInstallFailure("ppm-library install", e, alreadySatisfied, preinstalled, statusCallback);
+        }
+    }
+
+    /**
+     * Handles a failed install step: rethrows when the environment cannot run
+     * without it, and warns-and-continues when a satisfactory ppm_library is
+     * already installed (the offline-reanalysis case).
+     *
+     * @param step             short label for the step that failed
+     * @param cause            the failure
+     * @param alreadySatisfied whether the installed ppm_library already meets
+     *                         {@link #REQUIRED_PPM_VERSION}
+     * @param preinstalled     the already-installed ppm_library version, if any
+     * @throws IOException when the failure is fatal
+     */
+    private void recordInstallFailure(
+            String step,
+            IOException cause,
+            boolean alreadySatisfied,
+            String preinstalled,
+            Consumer<String> statusCallback)
+            throws IOException {
+        // Record it either way -- an outdated ppm_library at the end of
+        // initialize() needs to report the download failure as the reason.
+        lastInstallFailure = step + " failed: " + cause.getMessage();
+
+        if (!alreadySatisfied) {
+            throw cause;
+        }
+        logger.warn(
+                "{} failed, continuing with the environment already on disk "
+                        + "(ppm_library {} meets the {} floor). PPM analysis will run offline. Cause: {}",
+                step,
+                preinstalled,
+                REQUIRED_PPM_VERSION,
+                cause.getMessage());
+        report(statusCallback, "Offline: using the Python environment already installed.");
+    }
+
+    /**
+     * Reports the ppm_library version already installed in the pixi environment,
+     * or null when nothing usable is installed (env not built, import fails,
+     * pixi unable to run). Both packages are imported, because ppm_library
+     * imports microscope_imageprocessing at module load time -- a ppm_library
+     * that cannot import is not usable, however new its version string.
+     */
+    private String detectInstalledPpmVersion(Path pixi, Path envBase, Path manifestPath) {
+        // Probe only when the pixi env already has an interpreter. "pixi run"
+        // installs the env if it is missing, so probing an unbuilt env would
+        // silently move the multi-minute first-run install into a step the
+        // status callback reports as nothing at all.
+        Path envDir = envBase.resolve(".pixi").resolve("envs").resolve("default");
+        if (!Files.isRegularFile(envDir.resolve("bin").resolve("python"))
+                && !Files.isRegularFile(envDir.resolve("python.exe"))) {
+            return null; // environment not installed yet
+        }
+        String marker = "PPM_INSTALLED_VERSION=";
+        java.util.List<String> command = java.util.List.of(
+                pixi.toString(),
+                "run",
+                "--frozen",
+                "--manifest-path",
+                manifestPath.toString(),
+                "python",
+                "-c",
+                "import ppm_library, microscope_imageprocessing; " + "print('" + marker
+                        + "' + getattr(ppm_library, '__version__', 'unknown'))");
+        try {
+            ProcessBuilder pb = new ProcessBuilder(command);
+            pb.directory(envBase.toFile());
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+
+            String version = null;
+            try (BufferedReader reader =
+                    new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    int idx = line.indexOf(marker);
+                    if (idx >= 0) {
+                        version = line.substring(idx + marker.length()).trim();
+                    }
+                }
+            }
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                logger.info("No usable ppm_library detected in the environment (probe exit code {})", exitCode);
+                return null;
+            }
+            return version;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (IOException e) {
+            logger.info("Could not probe the installed ppm_library version: {}", e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -768,9 +1056,20 @@ public class ApposePPMService {
     }
 
     private void ensureInitialized() throws IOException {
-        if (!isAvailable()) {
-            throw new IOException("PPM Appose service is not available" + (initError != null ? ": " + initError : ""));
+        if (isAvailable()) {
+            return;
         }
+        // A healthy session whose worker died is recoverable without rebuilding
+        // the ~500 MB environment -- restart just the subprocess. Only a session
+        // that never initialized, or one carrying a real init error, is fatal.
+        if (initialized && initError == null && environment != null) {
+            logger.warn("PPM Python worker is no longer alive; restarting it before running the task.");
+            restartWorker();
+            if (isAvailable()) {
+                return;
+            }
+        }
+        throw new IOException("PPM Appose service is not available" + (initError != null ? ": " + initError : ""));
     }
 
     String loadScript(String scriptFileName) throws IOException {
@@ -836,6 +1135,17 @@ public class ApposePPMService {
         if (callback != null) {
             callback.accept(message);
         }
+    }
+
+    /**
+     * Reads a String output from a completed task, mapping an absent key to
+     * null. {@code String.valueOf()} would turn an absent key into the literal
+     * "null", which then reads downstream as a real value -- a bogus Python
+     * init error, or a version string that no comparison can make sense of.
+     */
+    private static String stringOutput(Task task, String key) {
+        Object value = task.outputs.get(key);
+        return value == null ? null : String.valueOf(value);
     }
 
     /**

@@ -58,6 +58,10 @@ public class PPMPolarityPlotWorkflow {
     static final String MEAS_R = "PPM Polarity: Resultant length";
     static final String MEAS_N_PIXELS = "PPM Polarity: Valid pixels";
     static final String MEAS_DOMINANT_BIN = "PPM Polarity: Dominant bin center (deg)";
+    // 1 when the birefringence collagen mask was applied, 0 when it was not.
+    // Unmasked results are numerically indistinguishable from masked ones, so
+    // whether the mask made it through has to be recorded, not inferred.
+    static final String MEAS_BIREF_MASKED = "PPM Polarity: Biref mask applied";
 
     private static Stage plotWindow;
     private static PolarHistogramPanel plotPanel;
@@ -80,14 +84,23 @@ public class PPMPolarityPlotWorkflow {
         final double stdDeg;
         final double resultantLength;
         final int nPixels;
+        final boolean birefMaskApplied;
 
-        ObjectResult(PathObject obj, int[] counts, double meanDeg, double stdDeg, double R, int nPixels) {
+        ObjectResult(
+                PathObject obj,
+                int[] counts,
+                double meanDeg,
+                double stdDeg,
+                double R,
+                int nPixels,
+                boolean birefMaskApplied) {
             this.obj = obj;
             this.counts = counts;
             this.meanDeg = meanDeg;
             this.stdDeg = stdDeg;
             this.resultantLength = R;
             this.nPixels = nPixels;
+            this.birefMaskApplied = birefMaskApplied;
         }
     }
 
@@ -412,7 +425,15 @@ public class PPMPolarityPlotWorkflow {
                     birefNDArray = PPMPerpendicularityWorkflow.bufferedImageToGray16NDArray(birefRegion);
                     birefServer.close();
                 } catch (Exception e) {
-                    logger.warn("Could not read biref sibling: {}", e.getMessage());
+                    // Losing the biref image loses the collagen mask with it, and
+                    // the numbers look identical either way -- so this is an ERROR,
+                    // and the object gets a MEAS_BIREF_MASKED = 0 marker below.
+                    logger.error(
+                            "Could not read the birefringence sibling image; collagen masking will NOT be "
+                                    + "applied and '{}' will be UNMASKED: {}",
+                            obj.getDisplayedName(),
+                            e.getMessage(),
+                            e);
                 }
             }
 
@@ -454,7 +475,7 @@ public class PPMPolarityPlotWorkflow {
             double R = getDoubleOrNaN(result, "resultant_length");
             int nPixels = result.has("n_pixels") ? result.get("n_pixels").getAsInt() : 0;
 
-            return new ObjectResult(obj, counts, mean, std, R, nPixels);
+            return new ObjectResult(obj, counts, mean, std, R, nPixels, birefNDArray != null);
         } finally {
             if (sumNDArray != null) sumNDArray.close();
             if (birefNDArray != null) birefNDArray.close();
@@ -468,6 +489,7 @@ public class PPMPolarityPlotWorkflow {
         if (!Double.isNaN(r.stdDeg)) ml.put(MEAS_CIRC_STD, r.stdDeg);
         if (!Double.isNaN(r.resultantLength)) ml.put(MEAS_R, r.resultantLength);
         ml.put(MEAS_N_PIXELS, r.nPixels);
+        ml.put(MEAS_BIREF_MASKED, r.birefMaskApplied ? 1.0 : 0.0);
         // Dominant bin center = where the histogram peak lies.
         if (r.counts != null && r.counts.length == bins && bins > 0) {
             int maxBin = 0;

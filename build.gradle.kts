@@ -69,6 +69,14 @@ tasks.shadowJar {
     mergeServiceFiles()
 }
 
+// Python bytecode caches are a local side effect of running the bundled Appose
+// scripts (importing them, py_compile, an editor). They must never ship in the
+// jar -- a stale run_perpendicularity.cpython-312.pyc did exactly that. The
+// .gitignore keeps them out of git; this keeps them out of the build.
+tasks.processResources {
+    exclude("**/__pycache__/**", "**/*.pyc", "**/*.pyo")
+}
+
 // For troubleshooting deprecation warnings
 tasks.withType<JavaCompile> {
     // Emit Java 21 bytecode (class 65) so the jar loads on QuPath 0.7's Java 21 runtime,

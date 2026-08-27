@@ -8,7 +8,9 @@ pip = ">=23.0"
 appose = ">=0.7.2"
 numpy = ">=1.24.0,<2.0"
 scipy = ">=1.11.0"
-scikit-image = ">=0.21.0"
+# run_perpendicularity.py calls remove_small_objects(..., max_size=...),
+# which only exists from 0.26; below that the call raises TypeError.
+scikit-image = ">=0.26.0"
 matplotlib-base = ">=3.7.0"
 pillow = ">=10.0.0"
 

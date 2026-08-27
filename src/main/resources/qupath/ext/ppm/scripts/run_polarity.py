@@ -29,6 +29,12 @@ try:
     from ppm_library.analysis.region_analysis import analyze_region
     from ppm_library.calibration.radial import RadialCalibrationResult
 
+    # Heartbeat: the first UPDATE event tells the Java side that Python
+    # actually started. ApposePPMService retries a task ONLY when no UPDATE
+    # ever arrived (the Appose worker had gone stale and died before running
+    # anything); a retry after this point would duplicate real work.
+    task.update(message='ppm:started')
+
     # Convert NDArrays to numpy arrays
     sum_arr = sum_image.ndarray()
 
@@ -67,20 +73,10 @@ try:
                 calibration.inv_slope, calibration.inv_intercept,
                 calibration.hue_offset, calibration.r_squared)
 
-    # Build combined foreground mask from biref and/or roi
-    combined_mask = None
-    if biref_arr is not None:
-        from ppm_library.analysis.region_analysis import compute_ppm_positive_mask
-        combined_mask = compute_ppm_positive_mask(biref_arr, biref_thresh)
-
-    if fg_mask is not None:
-        fg_bool = fg_mask > 0
-        if combined_mask is not None:
-            combined_mask = combined_mask & fg_bool
-        else:
-            combined_mask = fg_bool
-
-    # Run region analysis
+    # Run region analysis. analyze_region() builds the collagen mask itself
+    # from biref_array + foreground_mask, so there is deliberately no mask
+    # assembled here -- an earlier version built one and then never passed it,
+    # which read like the masking path while doing nothing.
     result = analyze_region(
         rgb_array=sum_arr,
         calibration=calibration,

@@ -58,6 +58,12 @@ try:
     )
     from ppm_library.calibration.radial import RadialCalibrationResult
 
+    # Heartbeat: the first UPDATE event tells the Java side that Python
+    # actually started. ApposePPMService retries a task ONLY when no UPDATE
+    # ever arrived (the Appose worker had gone stale and died before running
+    # anything); a retry after this point would duplicate real work.
+    task.update(message='ppm:started')
+
     # Convert NDArrays to numpy arrays
     sum_arr = sum_image.ndarray()
 
@@ -206,7 +212,19 @@ try:
     # show alignment + dominant orientation as heatmaps and optionally emit
     # per-window PathObjects on the Java side.
     window_summary = None
-    if win_enabled and result.get('fiber_angles') is not None and result.get('fiber_mask') is not None:
+    if win_enabled and (result.get('fiber_angles') is None or result.get('fiber_mask') is None):
+        # analyze_perpendicularity returned nothing to aggregate. Recording the
+        # skip is what makes it visible: the Java side reads window_analysis and
+        # reports it, instead of showing zero windows and no explanation.
+        missing = ', '.join(
+            key for key in ('fiber_angles', 'fiber_mask') if result.get(key) is None
+        )
+        logger.error('Window analysis skipped: %s not available from analyze_perpendicularity', missing)
+        window_summary = {
+            'enabled': True,
+            'error': 'skipped: ' + missing + ' not available from the analysis step',
+        }
+    elif win_enabled:
         try:
             window_px = max(2, int(round(win_um / float(pixel_size_um))))
             overlap_frac = max(0.0, min(0.95, win_overlap_pct / 100.0))
@@ -250,7 +268,7 @@ try:
                 'mean_order_parameter': mean_os,
             }
         except Exception as window_err:
-            logger.warning('Window analysis failed: %s', window_err)
+            logger.error('Window analysis failed: %s', window_err, exc_info=True)
             window_summary = {'enabled': True, 'error': str(window_err)}
     if window_summary is not None:
         result['window_analysis'] = window_summary

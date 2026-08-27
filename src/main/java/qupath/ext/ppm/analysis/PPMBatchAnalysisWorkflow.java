@@ -650,6 +650,7 @@ public class PPMBatchAnalysisWorkflow {
                         "Python error: " + result.get("error").getAsString());
             }
 
+            markBirefMasking(result, analysisSet, birefNDArray);
             return result;
         } finally {
             if (sumNDArray != null) sumNDArray.close();
@@ -728,6 +729,7 @@ public class PPMBatchAnalysisWorkflow {
                         "Python error: " + result.get("error").getAsString());
             }
 
+            markBirefMasking(result, analysisSet, birefNDArray);
             return result;
         } finally {
             if (sumNDArray != null) sumNDArray.close();
@@ -741,6 +743,12 @@ public class PPMBatchAnalysisWorkflow {
 
     /**
      * Reads a birefringence region as an NDArray, or returns null if unavailable.
+     *
+     * <p>A null return means the caller will omit {@code biref_image} and the
+     * collagen mask will not be applied at all. That produced results
+     * indistinguishable from properly masked ones, so a set that HAS a biref
+     * image but cannot be read logs at ERROR, and the callers mark the result
+     * with {@code biref_mask_applied}.</p>
      */
     @SuppressWarnings("unchecked")
     private static NDArray readBirefNDArray(PPMAnalysisSet analysisSet, int x, int y, int w, int h) {
@@ -754,9 +762,24 @@ public class PPMBatchAnalysisWorkflow {
             birefServer.close();
             return PPMPerpendicularityWorkflow.bufferedImageToGray16NDArray(birefRegion);
         } catch (Exception e) {
-            logger.debug("Could not read biref region: {}", e.getMessage());
+            logger.error(
+                    "Could not read the birefringence region for this set; collagen masking will NOT be applied "
+                            + "and the result will be UNMASKED: {}",
+                    e.getMessage(),
+                    e);
             return null;
         }
+    }
+
+    /**
+     * Marks a result with whether the birefringence collagen mask was applied,
+     * and whether it was expected. Written into the JSON so it reaches both the
+     * annotation measurements and batch_results.csv.
+     */
+    private static void markBirefMasking(JsonObject result, PPMAnalysisSet analysisSet, NDArray birefNDArray) {
+        boolean expected = analysisSet != null && analysisSet.hasBirefImage();
+        result.addProperty("biref_mask_expected", expected);
+        result.addProperty("biref_mask_applied", birefNDArray != null);
     }
 
     private static void updateProgress(

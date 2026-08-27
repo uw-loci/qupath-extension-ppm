@@ -51,6 +51,13 @@ public class PPMBatchResultsWriter {
     public static final String CONTOUR_LENGTH_UM = PREFIX + "contour_length_um";
     public static final String DILATION_UM = PREFIX + "dilation_um";
 
+    // Provenance: whether the birefringence collagen mask was actually applied
+    // (1/0), and whether the analysis set had a biref image to apply. An
+    // unmasked result is numerically indistinguishable from a masked one, so it
+    // has to be labelled rather than inferred.
+    public static final String BIREF_MASK_APPLIED = PREFIX + "biref_mask_applied";
+    public static final String BIREF_MASK_EXPECTED = PREFIX + "biref_mask_expected";
+
     private final List<Map<String, String>> csvRows = new ArrayList<>();
     private final List<String> csvColumns = new ArrayList<>();
     private boolean columnsFinalized = false;
@@ -74,6 +81,8 @@ public class PPMBatchResultsWriter {
         putIfPresent(ml, ARITHMETIC_MEAN, result, "arithmetic_mean");
         putIfPresent(ml, ARITHMETIC_STD, result, "arithmetic_std");
         putIfPresent(ml, N_VALID_PIXELS, result, "n_pixels");
+        putBooleanIfPresent(ml, BIREF_MASK_APPLIED, result, "biref_mask_applied");
+        putBooleanIfPresent(ml, BIREF_MASK_EXPECTED, result, "biref_mask_expected");
 
         // Compute dominant bin from histogram
         if (result.has("histogram_counts") && result.has("histogram_bin_edges")) {
@@ -108,6 +117,8 @@ public class PPMBatchResultsWriter {
 
         // Top-level fields
         putIfPresent(ml, CONTOUR_LENGTH_UM, result, "contour_length_um");
+        putBooleanIfPresent(ml, BIREF_MASK_APPLIED, result, "biref_mask_applied");
+        putBooleanIfPresent(ml, BIREF_MASK_EXPECTED, result, "biref_mask_expected");
 
         // Simple results
         JsonObject simple =
@@ -161,6 +172,8 @@ public class PPMBatchResultsWriter {
         row.put(ARITHMETIC_MEAN, getJsonStr(result, "arithmetic_mean"));
         row.put(ARITHMETIC_STD, getJsonStr(result, "arithmetic_std"));
         row.put(N_VALID_PIXELS, getJsonStr(result, "n_pixels"));
+        row.put(BIREF_MASK_APPLIED, getJsonStr(result, "biref_mask_applied"));
+        row.put(BIREF_MASK_EXPECTED, getJsonStr(result, "biref_mask_expected"));
 
         addRow(row);
     }
@@ -179,6 +192,8 @@ public class PPMBatchResultsWriter {
                 buildMetaRow(imageName, collection, sampleName, annotationName, annotationClass, "perpendicularity");
 
         row.put(CONTOUR_LENGTH_UM, getJsonStr(result, "contour_length_um"));
+        row.put(BIREF_MASK_APPLIED, getJsonStr(result, "biref_mask_applied"));
+        row.put(BIREF_MASK_EXPECTED, getJsonStr(result, "biref_mask_expected"));
 
         JsonObject simple =
                 result.has("simple") && !result.get("simple").isJsonNull() ? result.getAsJsonObject("simple") : null;
@@ -294,6 +309,22 @@ public class PPMBatchResultsWriter {
             ml.put(measurementKey, json.get(jsonKey).getAsDouble());
         } catch (Exception e) {
             // Skip non-numeric values
+        }
+    }
+
+    /**
+     * Stores a boolean JSON field as a 1/0 measurement. QuPath measurements are
+     * doubles only, so a provenance flag has to be encoded rather than skipped.
+     */
+    private static void putBooleanIfPresent(
+            qupath.lib.measurements.MeasurementList ml, String measurementKey, JsonObject json, String jsonKey) {
+        if (json == null || !json.has(jsonKey) || json.get(jsonKey).isJsonNull()) {
+            return;
+        }
+        try {
+            ml.put(measurementKey, json.get(jsonKey).getAsBoolean() ? 1.0 : 0.0);
+        } catch (Exception e) {
+            // Not a boolean; leave the measurement unset rather than guess.
         }
     }
 

@@ -1121,6 +1121,11 @@ public class PPMPerpendicularityWorkflow {
 
                     List<PathObject> allTacsPolylines = new ArrayList<>();
 
+                    // Annotations whose window analysis produced nothing, with the
+                    // reason. Surfaced at the end rather than swallowed -- see
+                    // readWindowAnalysisError.
+                    List<String> windowFailures = new ArrayList<>();
+
                     // When per-window detections are created, install a measurement-map
                     // colormap that reproduces the PPM hue wheel from the active calibration,
                     // so "Window mean angle (deg)" can be colored to match the source image
@@ -1195,6 +1200,20 @@ public class PPMPerpendicularityWorkflow {
                         annResult.json.addProperty("annotation_name", annotationName);
                         annResult.json.addProperty("annotation_index", annotationIndex);
 
+                        // The analysis script reports a failed or skipped window
+                        // analysis inside the result JSON. Nothing here used to read
+                        // that key, so the user got zero window detections, no
+                        // alignment overlays, and a final "Analysis complete." with no
+                        // hint that anything went wrong. Collect the reasons instead.
+                        String windowError = readWindowAnalysisError(annResult.json, windowEnabled);
+                        if (windowError != null) {
+                            logger.warn(
+                                    "Window analysis produced no results for annotation '{}': {}",
+                                    annotationName,
+                                    windowError);
+                            windowFailures.add(annotationName + ": " + windowError);
+                        }
+
                         // Save JSON result
                         annotationOutputDir.toFile().mkdirs();
                         Path jsonPath = annotationOutputDir.resolve("results.json");
@@ -1265,8 +1284,9 @@ public class PPMPerpendicularityWorkflow {
                                         windowObjects.size(),
                                         annotationName);
                             } else {
-                                logger.info(
-                                        "Window-create requested but windows.json missing for annotation '{}'",
+                                logger.warn(
+                                        "Window-create requested but windows.json missing for annotation '{}' "
+                                                + "-- no window detections will be created",
                                         annotationName);
                             }
                         }
@@ -1322,13 +1342,23 @@ public class PPMPerpendicularityWorkflow {
                         logger.info("Added {} TACS polyline annotations total", allTacsPolylines.size());
                     }
 
+                    final String windowWarning = windowFailures.isEmpty()
+                            ? ""
+                            : "\n\nWindow analysis produced no results for " + windowFailures.size()
+                                    + " annotation(s):\n  " + String.join("\n  ", windowFailures);
                     Platform.runLater(() -> {
                         if (resultPanel != null) {
-                            resultPanel.setStatus("Analysis complete.\nResults saved to: " + outputDir);
+                            resultPanel.setStatus("Analysis complete.\nResults saved to: " + outputDir + windowWarning);
                         }
                         if (resultWindow != null) {
                             resultWindow.show();
                             resultWindow.toFront();
+                        }
+                        if (!windowWarning.isEmpty()) {
+                            Dialogs.showWarningNotification(
+                                    "Surface Perpendicularity Analysis",
+                                    "Window analysis produced no results for " + windowFailures.size()
+                                            + " annotation(s). See the results panel or the log for the reason.");
                         }
                     });
 
@@ -1456,7 +1486,14 @@ public class PPMPerpendicularityWorkflow {
                     birefNDArray = bufferedImageToGray16NDArray(birefRegion);
                     birefServer.close();
                 } catch (Exception e) {
-                    logger.warn("Could not read biref sibling: {}", e.getMessage());
+                    // Dropping the biref image drops the collagen mask with it, and
+                    // an unmasked result looks exactly like a masked one. Say so
+                    // loudly, and mark the result below so it cannot be mistaken.
+                    logger.error(
+                            "Could not read the birefringence sibling image; collagen masking will NOT be "
+                                    + "applied and this result will be UNMASKED: {}",
+                            e.getMessage(),
+                            e);
                 }
             }
 
@@ -1515,6 +1552,13 @@ public class PPMPerpendicularityWorkflow {
                         "Python error: " + result.get("error").getAsString());
             }
 
+            // Record whether the birefringence collagen mask was actually applied.
+            // "Expected but not applied" is the silent-drop-out case; without this
+            // marker an unmasked result is indistinguishable from a masked one.
+            boolean birefExpected = classifier == null && analysisSet != null && analysisSet.hasBirefImage();
+            result.addProperty("biref_mask_expected", birefExpected);
+            result.addProperty("biref_mask_applied", birefNDArray != null);
+
             // Extract foreground mask NDArray if returned by Python
             byte[] maskBytes = null;
             NDArray maskNDArray = null;
@@ -1538,6 +1582,29 @@ public class PPMPerpendicularityWorkflow {
             if (birefNDArray != null) birefNDArray.close();
             if (foregroundNDArray != null) foregroundNDArray.close();
         }
+    }
+
+    /**
+     * Returns why window analysis produced nothing, or null when it succeeded or
+     * was never requested.
+     *
+     * <p>The Python script reports both a hard failure and a skipped run through
+     * an {@code error} field inside {@code window_analysis}. A requested window
+     * analysis that comes back with no {@code window_analysis} block at all is
+     * itself a silent drop-out, and is reported as such.</p>
+     */
+    static String readWindowAnalysisError(JsonObject result, boolean windowEnabled) {
+        if (!windowEnabled || result == null) {
+            return null;
+        }
+        if (!result.has("window_analysis") || result.get("window_analysis").isJsonNull()) {
+            return "the analysis script returned no window_analysis results";
+        }
+        JsonObject window = result.getAsJsonObject("window_analysis");
+        if (window.has("error") && !window.get("error").isJsonNull()) {
+            return window.get("error").getAsString();
+        }
+        return null;
     }
 
     /**
