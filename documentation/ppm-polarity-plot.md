@@ -40,6 +40,7 @@ Each processed object receives the following measurements (visible in QuPath's m
 | `PPM Polarity: Resultant length` | Alignment strength R (0 = random, 1 = perfectly aligned) |
 | `PPM Polarity: Valid pixels` | Pixel count that passed the biref threshold |
 | `PPM Polarity: Dominant bin center (deg)` | Centre of the highest-count histogram bin |
+| `PPM Polarity: Biref mask applied` | 1 = birefringence collagen mask was applied, 0 = biref sibling image was unavailable or unreadable |
 
 ## Rose Diagram
 

@@ -63,6 +63,18 @@ Results are saved as CSV files in the project directory:
 | **polarity_results.csv** | Per-annotation circular statistics: mean angle, circular std dev, resultant length, valid pixel count |
 | **perpendicularity_results.csv** | Per-annotation perpendicularity scores: mean deviation, parallel/oblique/perpendicular fractions, PS-TACS score |
 
+### CSV Columns
+
+**Polarity results** include: annotation metadata, mean angle, circular std dev, resultant length, valid pixel count, and birefringence mask provenance.
+
+**Perpendicularity results** include: annotation metadata, contour length, and birefringence mask provenance.
+
+All results include these mask-provenance columns:
+- `biref_mask_applied` (1 = mask was applied, 0 = birefringence sibling image not available or unreadable)
+- `biref_mask_expected` (1 = the analysis set has a biref sibling, 0 = no biref image for this set)
+
+An unmasked result (mask_applied=0) is numerically indistinguishable from a masked one, so these fields let you identify when the collagen mask was unavailable.
+
 ### QuPath Measurements
 
 Analysis results are also added to QuPath's annotation measurement tables, making them available for:

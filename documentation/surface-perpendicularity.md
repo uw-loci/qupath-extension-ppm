@@ -178,6 +178,8 @@ This is an **extension beyond** the PS-TACS paper -- the paper scores along the
 user-drawn boundary, not on a moving-window grid. The window definitions and
 metric (axial order parameter) are our own; cite as such.
 
+**Note on failures:** If window analysis is enabled but produces no results for an annotation, a warning message will appear listing which annotations failed and why. Common reasons include missing fiber mask or angles from the perpendicularity analysis step, or an error reading the analyzed images. Check the log window for details.
+
 #### Coloring windows by orientation (PPM Hue to Angle colormap)
 
 When **Create per-window detection objects** is on, the workflow also installs a
@@ -270,6 +272,8 @@ The results window has three buttons in its title row:
 | **PS-TACS Score** | Fraction of perpendicular fibers (higher = more perpendicular organization) |
 | **Contour Length** | Total length of the boundary contour analyzed |
 | **Valid Pixels** | Number of pixels in the analysis zone that contributed |
+| **Biref Mask Expected** | 1 = the analysis set has a birefringence sibling image, 0 = no biref image |
+| **Biref Mask Applied** | 1 = collagen mask was successfully applied, 0 = biref sibling was unavailable or unreadable |
 
 ## GeoJSON Export
 
