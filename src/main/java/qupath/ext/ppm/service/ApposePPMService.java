@@ -161,7 +161,7 @@ public class ApposePPMService {
         if (svc != null && svc.environment != null) {
             return Path.of(svc.environment.base());
         }
-        return Path.of(System.getProperty("user.home"), ".local", "share", "appose", ENV_NAME);
+        return ApposeEnvLocation.resolve(qupath.ext.ppm.PPMPreferences.getEnvBaseDir(), ENV_NAME);
     }
 
     /**
@@ -209,12 +209,22 @@ public class ApposePPMService {
                 report(statusCallback, "Building pixi environment (this may take several minutes)...");
 
                 // Build the pixi environment (downloads deps on first run)
-                environment = Appose.pixi()
+                var envBuilder = Appose.pixi()
                         .content(pixiToml)
                         .scheme("pixi.toml")
                         .name(ENV_NAME)
-                        .logDebug()
-                        .build();
+                        .logDebug();
+
+                // Builder.base() overrides name(), so pass the FULL
+                // <base>/ENV_NAME directory -- the same path
+                // getEnvironmentPath() reports and the manifest was staged into.
+                Path configuredDir = configuredEnvDir();
+                if (configuredDir != null) {
+                    Files.createDirectories(configuredDir);
+                    envBuilder.base(configuredDir.toFile());
+                    logger.info("Building the environment at the configured location: {}", configuredDir);
+                }
+                environment = envBuilder.build();
 
                 logger.info("Appose environment configured at: {}", environment.base());
 
@@ -295,6 +305,9 @@ public class ApposePPMService {
                 logger.info("=================================");
 
                 initialized = true;
+                // Built AND verified: the only point at which offering to
+                // remove the environment this replaced is safe.
+                offerPreviousEnvCleanup();
                 initError = versionCompatible ? null : initError;
                 registerShutdownHook();
                 report(
@@ -1181,5 +1194,48 @@ public class ApposePPMService {
             result[i] = Integer.parseInt(parts[i]);
         }
         return result;
+    }
+
+    /**
+     * The configured environment directory, or null to use the Appose default.
+     * Kept beside the path-reporting method so the reported location and the
+     * built location cannot drift apart: setting only one moves where we SAY
+     * the environment is while Appose keeps building elsewhere, and the staged
+     * manifest is never read.
+     */
+    private static Path configuredEnvDir() {
+        String base = qupath.ext.ppm.PPMPreferences.getEnvBaseDir();
+        if (base == null || base.isBlank()) {
+            return null;
+        }
+        return ApposeEnvLocation.resolve(base, ENV_NAME);
+    }
+
+    /**
+     * After a VERIFIED build, offer to remove the environment this one replaced.
+     *
+     * <p>Off the initialization thread and never blocking it; degrades to
+     * leaving the old directory alone when there is no UI. Records the current
+     * location regardless of the answer -- the question is asked once, and
+     * declining means keep, not ask again every launch.
+     */
+    private void offerPreviousEnvCleanup() {
+        final Path current = getEnvironmentPath();
+        final String previous = qupath.ext.ppm.PPMPreferences.getEnvLastBuiltDir();
+        qupath.ext.ppm.PPMPreferences.setEnvLastBuiltDir(current.toString());
+        if (previous == null || previous.isBlank() || previous.equals(current.toString())) {
+            return;
+        }
+        try {
+            javafx.application.Platform.runLater(() -> {
+                try {
+                    ApposeEnvLocation.promptCleanup(Path.of(previous), current);
+                } catch (Exception e) {
+                    logger.warn("Previous-environment cleanup prompt failed: {}", e.getMessage());
+                }
+            });
+        } catch (IllegalStateException e) {
+            logger.info("Previous environment at {} left in place (no UI available)", previous);
+        }
     }
 }

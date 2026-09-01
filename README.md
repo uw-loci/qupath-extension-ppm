@@ -134,6 +134,8 @@ The PPM extension will add a **PPM Analysis** submenu under QuPath's **Extension
 
 **If QPSC is missing:** When you launch QuPath without QPSC, a dialog will appear with instructions on how to install it. You can also click **Extensions > PPM Analysis > Install QPSC extension (required)...** at any time to see the installation instructions.
 
+**Python environment location:** The first time you run an analysis workflow, QuPath will build a Python environment for the analysis computations. By default it is built in `~/.local/share/appose`. If your home directory has limited disk quota (common on HPC clusters), you can configure a different location in **Edit > Preferences > PPM: Python environment** before running the first analysis. See the [PPM: Setup and Use](documentation/ppm-setup-and-use.md#2-configure-the-python-environment-optional) guide for details.
+
 ---
 
 ## Building from Source

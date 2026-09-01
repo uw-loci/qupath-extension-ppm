@@ -3,6 +3,8 @@ package qupath.ext.ppm;
 import javafx.beans.property.StringProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.fx.prefs.controlsfx.PropertyItemBuilder;
+import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.prefs.PathPrefs;
 
 /**
@@ -112,6 +114,71 @@ public class PPMPreferences {
     // Shared with QPSC -- same global preference key, read-only from analysis side
     private static final StringProperty activeCalibrationPath =
             PathPrefs.createPersistentPreference("PPMActiveCalibrationPath", "");
+
+    // ==================== Python environment ====================
+    //
+    // DUPLICATED ACROSS THE APPOSE EXTENSIONS. The same pair of preferences and
+    // the same ApposeEnvLocation helper exist in QP-CAT, cellAPpose, the DL
+    // pixel classifier and fiber-analysis. No shared library yet -- see
+    // claude-reports/TODO_LIST.md, "shared Appose env-location library". Change
+    // all five together or they diverge.
+
+    private static final String CATEGORY_ENV = "PPM: Python environment";
+
+    /** Base dir for the Appose env; blank means the Appose default. */
+    private static final StringProperty envBaseDir = PathPrefs.createPersistentPreference("PPMEnvBaseDir", "");
+
+    /** Where an env was last successfully built. Bookkeeping, not a setting. */
+    private static final StringProperty envLastBuiltDir =
+            PathPrefs.createPersistentPreference("PPMEnvLastBuiltDir", "");
+
+    /** Base dir for the Appose env, or "" for the Appose default. */
+    public static String getEnvBaseDir() {
+        return envBaseDir.get();
+    }
+
+    public static void setEnvBaseDir(String v) {
+        envBaseDir.set(v == null ? "" : v.strip());
+    }
+
+    /** Directory an env was last successfully built at; "" if none. */
+    public static String getEnvLastBuiltDir() {
+        return envLastBuiltDir.get();
+    }
+
+    public static void setEnvLastBuiltDir(String v) {
+        envLastBuiltDir.set(v == null ? "" : v);
+    }
+
+    private static boolean paneInstalled = false;
+
+    /**
+     * Add the environment-location preference to QuPath's Preferences pane.
+     *
+     * <p>PPM previously exposed none of its preferences there, so this
+     * introduces the registration as well as the item.
+     */
+    public static synchronized void installPreferencePane(QuPathGUI qupath) {
+        if (qupath == null || paneInstalled) {
+            return;
+        }
+        paneInstalled = true;
+        qupath.getPreferencePane()
+                .getPropertySheet()
+                .getItems()
+                .add(new PropertyItemBuilder<>(envBaseDir, String.class)
+                        .propertyType(PropertyItemBuilder.PropertyType.DIRECTORY)
+                        .name("Python environment location")
+                        .category(CATEGORY_ENV)
+                        .description("Directory the Python environment is built under. Leave "
+                                + "blank for the default (~/.local/share/appose), which is right "
+                                + "on most machines. Set it when the home directory is "
+                                + "quota-limited -- on HPC and managed desktops an environment "
+                                + "this size fails there. Changing it builds a NEW environment; "
+                                + "the old one is left alone and you are asked about removing it "
+                                + "only after the new one works.")
+                        .build());
+    }
 
     private PPMPreferences() {}
 

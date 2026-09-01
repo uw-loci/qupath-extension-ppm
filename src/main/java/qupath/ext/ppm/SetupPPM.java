@@ -74,6 +74,8 @@ public class SetupPPM implements QuPathExtension, GitHubProject {
 
     @Override
     public void installExtension(QuPathGUI qupath) {
+        // Expose the Python environment location in QuPath's Preferences.
+        PPMPreferences.installPreferencePane(qupath);
         String extVersion = GeneralTools.getPackageVersion(SetupPPM.class);
         logger.info("Installing PPM Analysis extension v{}", extVersion != null ? extVersion : "dev");
 

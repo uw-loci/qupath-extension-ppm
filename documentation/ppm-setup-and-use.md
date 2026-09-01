@@ -105,7 +105,32 @@ See: [PPM Reference Slide (Sunburst Calibration)](ppm-reference-slide.md)
 
 ---
 
-## 2. Camera, White Balance, and Background
+## 2. Configure the Python Environment (Optional)
+
+The PPM extension uses **Appose** to manage a Python environment for analysis computations. By default, this environment is built in `~/.local/share/appose`. On HPC clusters and managed desktops where the home directory has limited disk quota, this can fail with "Quota exceeded" errors.
+
+**To configure a different location:**
+
+1. Open QuPath and go to **Edit > Preferences** (or **QuPath > Preferences** on macOS)
+2. In the Preferences pane, look for **PPM: Python environment** category
+3. Set **"Python environment location"** to a directory on a filesystem with sufficient space (e.g. `/scratch/`, project storage, or a local SSD)
+4. Leave it blank to use the default location
+
+**What happens when you change it:**
+
+- The first time you run an analysis workflow, a new environment is built at the configured location
+- After the new environment is verified, QuPath will ask whether to delete the old one (keeping it safe by default)
+- The preference is persistent -- QuPath remembers your choice across sessions
+
+**Typical locations to use:**
+
+- **HPC cluster:** `/scratch/$USER/` or your project's shared storage path
+- **Managed desktop:** Ask your IT team for a high-quota directory; common patterns include `/data/`, `/work/`, or `/projects/`
+- **Development workstation:** Leave it blank; the default is fine
+
+---
+
+## 3. Camera, White Balance, and Background
 
 Good PPM images depend on correct **per-angle** exposure/white balance and flat-field
 background correction, because transmitted light intensity varies dramatically with
@@ -138,7 +163,7 @@ Detailed guides (qpsc repo):
 
 ---
 
-## 3. The Four Standard PPM Angles
+## 4. The Four Standard PPM Angles
 
 A typical PPM acquisition captures multiple images per tile position, each at a different
 polarizer rotation angle. The standard 4-angle set (with typical exposures) is:
@@ -169,7 +194,7 @@ Full developer reference:
 
 ---
 
-## 4. Acquisition
+## 5. Acquisition
 
 PPM is not a separate acquisition dialog -- it is selected as a **modality** during a normal
 QPSC acquisition. Use either of the standard acquisition entry points:
@@ -202,7 +227,7 @@ For the general acquisition walkthrough and dialog details, see the qpsc guides:
 
 ---
 
-## 5. Analysis
+## 6. Analysis
 
 After acquisition, PPM analysis runs in **this extension** under **Extensions > PPM Analysis**
 -- no microscope required. **All analysis tools require the Sunburst calibration `.npz`**
