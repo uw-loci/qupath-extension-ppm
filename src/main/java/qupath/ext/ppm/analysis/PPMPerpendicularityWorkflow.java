@@ -156,7 +156,7 @@ public class PPMPerpendicularityWorkflow {
             } catch (Exception e) {
                 logger.error("Failed to run perpendicularity workflow", e);
                 Dialogs.showErrorMessage(
-                        "Surface Perpendicularity Analysis",
+                        "Surface Perpendicularity Analysis - Error",
                         DocumentationHelper.withDocLink("Error: " + e.getMessage(), "ppmPerpendicularity"));
             }
         });
@@ -166,7 +166,7 @@ public class PPMPerpendicularityWorkflow {
         QuPathGUI gui = QPEx.getQuPath();
         if (gui == null) {
             Dialogs.showErrorMessage(
-                    "Surface Perpendicularity Analysis",
+                    "Surface Perpendicularity Analysis - Error",
                     DocumentationHelper.withDocLink("QuPath is not available.", "ppmPerpendicularity"));
             return;
         }
@@ -174,7 +174,7 @@ public class PPMPerpendicularityWorkflow {
         ImageData<BufferedImage> imageData = gui.getImageData();
         if (imageData == null) {
             Dialogs.showErrorMessage(
-                    "Surface Perpendicularity Analysis",
+                    "Surface Perpendicularity Analysis - Error",
                     DocumentationHelper.withDocLink("No image is open.", "ppmPerpendicularity"));
             return;
         }
@@ -182,7 +182,7 @@ public class PPMPerpendicularityWorkflow {
         Project<BufferedImage> project = gui.getProject();
         if (project == null) {
             Dialogs.showErrorMessage(
-                    "Surface Perpendicularity Analysis",
+                    "Surface Perpendicularity Analysis - Error",
                     DocumentationHelper.withDocLink(
                             "A QuPath project is required for this analysis.\n" + "Create or open a project first.",
                             "ppmPerpendicularity"));
@@ -213,7 +213,7 @@ public class PPMPerpendicularityWorkflow {
                 }
 
                 Dialogs.showErrorMessage(
-                        "Surface Perpendicularity Analysis",
+                        "Surface Perpendicularity Analysis - Error",
                         DocumentationHelper.withDocLink(
                                 "This analysis requires a PPM color (angle) image.\n"
                                         + "The currently open image ("
@@ -233,7 +233,7 @@ public class PPMPerpendicularityWorkflow {
         String calibrationPath = findCalibrationPath(currentEntry, project);
         if (calibrationPath == null) {
             Dialogs.showErrorMessage(
-                    "Surface Perpendicularity Analysis",
+                    "Surface Perpendicularity Analysis - Error",
                     DocumentationHelper.withDocLink(
                             "No PPM calibration found. Run sunburst calibration first.", "ppmPerpendicularity"));
             return;
@@ -255,13 +255,13 @@ public class PPMPerpendicularityWorkflow {
                 pixelSizeUm = Double.parseDouble(input.trim());
             } catch (NumberFormatException e) {
                 Dialogs.showErrorMessage(
-                        "Surface Perpendicularity Analysis",
+                        "Surface Perpendicularity Analysis - Error",
                         DocumentationHelper.withDocLink("Invalid pixel size: " + input, "ppmPerpendicularity"));
                 return;
             }
             if (pixelSizeUm <= 0) {
                 Dialogs.showErrorMessage(
-                        "Surface Perpendicularity Analysis",
+                        "Surface Perpendicularity Analysis - Error",
                         DocumentationHelper.withDocLink("Pixel size must be positive.", "ppmPerpendicularity"));
                 return;
             }
@@ -279,7 +279,7 @@ public class PPMPerpendicularityWorkflow {
 
         if (classNames.isEmpty()) {
             Dialogs.showErrorMessage(
-                    "Surface Perpendicularity Analysis",
+                    "Surface Perpendicularity Analysis - Error",
                     DocumentationHelper.withDocLink(
                             "No classified annotations found.\n" + "Assign a class to boundary annotations first.",
                             "ppmPerpendicularity"));
@@ -955,7 +955,7 @@ public class PPMPerpendicularityWorkflow {
             // Validate classifier selection
             if (useClassifier && ("(none available)".equals(selectedClassifier) || selectedClassifier == null)) {
                 Dialogs.showErrorMessage(
-                        "Surface Perpendicularity Analysis",
+                        "Surface Perpendicularity Analysis - Error",
                         "No pixel classifier selected. Create a pixel classifier or thresholder\n"
                                 + "in the QuPath project first, or switch to threshold mode.");
                 return;
@@ -969,7 +969,7 @@ public class PPMPerpendicularityWorkflow {
 
             if (matchingAnnotations.isEmpty()) {
                 Dialogs.showErrorMessage(
-                        "Surface Perpendicularity Analysis",
+                        "Surface Perpendicularity Analysis - Error",
                         DocumentationHelper.withDocLink(
                                 "No annotations found with class '" + selectedClass + "'.", "ppmPerpendicularity"));
                 return;
@@ -997,14 +997,14 @@ public class PPMPerpendicularityWorkflow {
                 } catch (Exception ex) {
                     logger.error("Failed to load pixel classifier '{}': {}", selectedClassifier, ex.getMessage());
                     Dialogs.showErrorMessage(
-                            "Surface Perpendicularity Analysis",
+                            "Surface Perpendicularity Analysis - Error",
                             "Failed to load pixel classifier '" + selectedClassifier + "': " + ex.getMessage());
                     return;
                 }
 
                 if (analysisSet == null || !analysisSet.hasBirefImage()) {
                     Dialogs.showErrorMessage(
-                            "Surface Perpendicularity Analysis",
+                            "Surface Perpendicularity Analysis - Error",
                             "No biref sibling image found for the current entry.\n\n"
                                     + "The pixel classifier mode runs the thresholder against the\n"
                                     + "birefringence image (+7 / -7 PPM), so a biref sibling must be\n"
@@ -1023,7 +1023,7 @@ public class PPMPerpendicularityWorkflow {
                             analysisSet.birefImage.getImageName(),
                             ex.getMessage());
                     Dialogs.showErrorMessage(
-                            "Surface Perpendicularity Analysis",
+                            "Surface Perpendicularity Analysis - Error",
                             "Failed to open biref sibling '" + analysisSet.birefImage.getImageName() + "': "
                                     + ex.getMessage());
                     return;
@@ -1054,7 +1054,7 @@ public class PPMPerpendicularityWorkflow {
                     } catch (Exception ignore) {
                     }
                     Dialogs.showErrorMessage(
-                            "Surface Perpendicularity Analysis",
+                            "Surface Perpendicularity Analysis - Error",
                             "Classifier '" + selectedClassifier
                                     + "' does not support the biref image\n'"
                                     + analysisSet.birefImage.getImageName() + "'.\n\n"
@@ -1367,7 +1367,7 @@ public class PPMPerpendicularityWorkflow {
                 } catch (Exception ex) {
                     logger.error("Perpendicularity analysis failed", ex);
                     Platform.runLater(() -> Dialogs.showErrorMessage(
-                            "Surface Perpendicularity Analysis",
+                            "Surface Perpendicularity Analysis - Error",
                             DocumentationHelper.withDocLink(
                                     "Analysis failed: " + ex.getMessage(), "ppmPerpendicularity")));
                 } finally {
@@ -2011,7 +2011,7 @@ public class PPMPerpendicularityWorkflow {
             resultPanel = new PPMPerpendicularityPanel();
             Scene scene = new Scene(resultPanel, 550, 600);
             resultWindow = new Stage();
-            resultWindow.setTitle("Surface Perpendicularity Analysis");
+            resultWindow.setTitle("Surface Perpendicularity Analysis - Results");
             resultWindow.setScene(scene);
             resultWindow.initOwner(gui.getStage());
         } else {

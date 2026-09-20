@@ -81,7 +81,7 @@ public class PPMBatchAnalysisWorkflow {
             } catch (Exception e) {
                 logger.error("Failed to run batch analysis workflow", e);
                 Dialogs.showErrorMessage(
-                        "Batch PPM Analysis",
+                        "Batch PPM Analysis - Error",
                         DocumentationHelper.withDocLink("Error: " + e.getMessage(), "ppmBatchAnalysis"));
             }
         });
@@ -95,7 +95,7 @@ public class PPMBatchAnalysisWorkflow {
         QuPathGUI gui = QPEx.getQuPath();
         if (gui == null) {
             Dialogs.showErrorMessage(
-                    "Batch PPM Analysis",
+                    "Batch PPM Analysis - Error",
                     DocumentationHelper.withDocLink("QuPath is not available.", "ppmBatchAnalysis"));
             return;
         }
@@ -103,7 +103,7 @@ public class PPMBatchAnalysisWorkflow {
         Project<BufferedImage> project = gui.getProject();
         if (project == null) {
             Dialogs.showErrorMessage(
-                    "Batch PPM Analysis",
+                    "Batch PPM Analysis - Error",
                     DocumentationHelper.withDocLink(
                             "A QuPath project is required. Create or open a project first.", "ppmBatchAnalysis"));
             return;
@@ -113,7 +113,7 @@ public class PPMBatchAnalysisWorkflow {
 
         if (discoveredSets.isEmpty()) {
             Dialogs.showErrorMessage(
-                    "Batch PPM Analysis",
+                    "Batch PPM Analysis - Error",
                     DocumentationHelper.withDocLink(
                             "No qualified PPM analysis sets found in this project.\n\n"
                                     + "Requirements: PPM modality images with at least one angle image\n"
@@ -275,13 +275,13 @@ public class PPMBatchAnalysisWorkflow {
             List<PPMBatchAnalysisPanel.AnalysisSetItem> selected = panel.getSelectedItems();
             if (selected.isEmpty()) {
                 Dialogs.showErrorMessage(
-                        "Batch PPM Analysis",
+                        "Batch PPM Analysis - Error",
                         DocumentationHelper.withDocLink("No analysis sets selected.", "ppmBatchAnalysis"));
                 return;
             }
             if (!panel.isPolaritySelected() && !panel.isPerpendicularitySelected()) {
                 Dialogs.showErrorMessage(
-                        "Batch PPM Analysis",
+                        "Batch PPM Analysis - Error",
                         DocumentationHelper.withDocLink("Select at least one analysis type.", "ppmBatchAnalysis"));
                 return;
             }
@@ -289,7 +289,7 @@ public class PPMBatchAnalysisWorkflow {
                     && (panel.getBoundaryClass() == null
                             || panel.getBoundaryClass().isEmpty())) {
                 Dialogs.showErrorMessage(
-                        "Batch PPM Analysis",
+                        "Batch PPM Analysis - Error",
                         DocumentationHelper.withDocLink(
                                 "Select a boundary annotation class for perpendicularity analysis.",
                                 "ppmBatchAnalysis"));
@@ -388,7 +388,7 @@ public class PPMBatchAnalysisWorkflow {
                 Platform.runLater(() -> {
                     progressStage.close();
                     Dialogs.showErrorMessage(
-                            "Batch PPM Analysis",
+                            "Batch PPM Analysis - Error",
                             DocumentationHelper.withDocLink(
                                     "Failed to initialize PPM analysis environment: " + e.getMessage(),
                                     "ppmBatchAnalysis"));
@@ -575,7 +575,7 @@ public class PPMBatchAnalysisWorkflow {
                         msg = "Analysis cancelled.\n\n" + msg;
                     }
 
-                    Dialogs.showMessageDialog("Batch PPM Analysis", msg);
+                    Dialogs.showMessageDialog("Batch PPM Analysis - Summary", msg);
                 });
 
             } catch (Exception e) {
@@ -583,7 +583,7 @@ public class PPMBatchAnalysisWorkflow {
                 Platform.runLater(() -> {
                     progressStage.close();
                     Dialogs.showErrorMessage(
-                            "Batch PPM Analysis",
+                            "Batch PPM Analysis - Error",
                             DocumentationHelper.withDocLink(
                                     "Analysis completed but CSV write failed: " + e.getMessage()
                                             + "\n\nMeasurements were still stored on annotations.",

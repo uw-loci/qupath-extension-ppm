@@ -63,7 +63,7 @@ public class PPMHueRangeWorkflow {
             } catch (Exception e) {
                 logger.error("Failed to run hue range filter workflow", e);
                 Dialogs.showErrorMessage(
-                        "PPM Hue Range Filter",
+                        "PPM Hue Range Filter - Error",
                         DocumentationHelper.withDocLink("Error: " + e.getMessage(), "ppmHueRangeFilter"));
             }
         });
@@ -73,7 +73,7 @@ public class PPMHueRangeWorkflow {
         QuPathGUI gui = QPEx.getQuPath();
         if (gui == null) {
             Dialogs.showErrorMessage(
-                    "PPM Hue Range Filter",
+                    "PPM Hue Range Filter - Error",
                     DocumentationHelper.withDocLink("QuPath is not available.", "ppmHueRangeFilter"));
             return;
         }
@@ -81,7 +81,8 @@ public class PPMHueRangeWorkflow {
         ImageData<BufferedImage> imageData = gui.getImageData();
         if (imageData == null) {
             Dialogs.showErrorMessage(
-                    "PPM Hue Range Filter", DocumentationHelper.withDocLink("No image is open.", "ppmHueRangeFilter"));
+                    "PPM Hue Range Filter - Error",
+                    DocumentationHelper.withDocLink("No image is open.", "ppmHueRangeFilter"));
             return;
         }
 
@@ -111,7 +112,7 @@ public class PPMHueRangeWorkflow {
         }
         if (calibrationPath == null) {
             Dialogs.showErrorMessage(
-                    "PPM Hue Range Filter",
+                    "PPM Hue Range Filter - Error",
                     DocumentationHelper.withDocLink(
                             "No PPM calibration found. Run sunburst calibration first.", "ppmHueRangeFilter"));
             return;
@@ -124,7 +125,7 @@ public class PPMHueRangeWorkflow {
         } catch (Exception e) {
             logger.error("Failed to load calibration from: {}", calibrationPath, e);
             Dialogs.showErrorMessage(
-                    "PPM Hue Range Filter",
+                    "PPM Hue Range Filter - Error",
                     DocumentationHelper.withDocLink(
                             "Failed to load calibration: " + e.getMessage(), "ppmHueRangeFilter"));
             return;

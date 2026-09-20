@@ -115,7 +115,7 @@ public class PPMPolarityPlotWorkflow {
             } catch (Exception e) {
                 logger.error("Failed to run polarity plot workflow", e);
                 Dialogs.showErrorMessage(
-                        "PPM Polarity Plot",
+                        "PPM Polarity Plot - Error",
                         DocumentationHelper.withDocLink("Error: " + e.getMessage(), "ppmPolarityPlot"));
             }
         });
@@ -125,7 +125,7 @@ public class PPMPolarityPlotWorkflow {
         QuPathGUI gui = QPEx.getQuPath();
         if (gui == null) {
             Dialogs.showErrorMessage(
-                    "PPM Polarity Plot",
+                    "PPM Polarity Plot - Error",
                     DocumentationHelper.withDocLink("QuPath is not available.", "ppmPolarityPlot"));
             return;
         }
@@ -133,7 +133,8 @@ public class PPMPolarityPlotWorkflow {
         ImageData<BufferedImage> imageData = gui.getImageData();
         if (imageData == null) {
             Dialogs.showErrorMessage(
-                    "PPM Polarity Plot", DocumentationHelper.withDocLink("No image is open.", "ppmPolarityPlot"));
+                    "PPM Polarity Plot - Error",
+                    DocumentationHelper.withDocLink("No image is open.", "ppmPolarityPlot"));
             return;
         }
 
@@ -157,7 +158,7 @@ public class PPMPolarityPlotWorkflow {
                     }
                 }
                 Dialogs.showErrorMessage(
-                        "PPM Polarity Plot",
+                        "PPM Polarity Plot - Error",
                         DocumentationHelper.withDocLink(
                                 "This analysis requires a PPM color (angle) image.\n"
                                         + "The currently open image ("
@@ -177,7 +178,7 @@ public class PPMPolarityPlotWorkflow {
         String calibrationPath = resolveCalibrationPath(analysisSet, currentEntry);
         if (calibrationPath == null) {
             Dialogs.showErrorMessage(
-                    "PPM Polarity Plot",
+                    "PPM Polarity Plot - Error",
                     DocumentationHelper.withDocLink(
                             "No PPM calibration found. Run sunburst calibration first.", "ppmPolarityPlot"));
             return;
@@ -219,7 +220,7 @@ public class PPMPolarityPlotWorkflow {
             } catch (Exception e) {
                 logger.error("Polarity plot computation failed", e);
                 Platform.runLater(() -> Dialogs.showErrorMessage(
-                        "PPM Polarity Plot",
+                        "PPM Polarity Plot - Error",
                         DocumentationHelper.withDocLink("Computation failed: " + e.getMessage(), "ppmPolarityPlot")));
             }
         });
