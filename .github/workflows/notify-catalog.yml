@@ -47,10 +47,16 @@ jobs:
           # still work; the catalog-side bump_catalog.py just stores whatever
           # URL we send, so consistency with the existing main_url is more
           # important than the suffix.
+          # The field is `browser_download_url` in the release-event webhook payload but `url`
+          # in `gh release view --json assets`. Reading only the former is why the manual
+          # dispatch always died with "No .jar asset found" even though the jar was there.
+          # Accept either.
           ASSET_URL=$(echo "$ASSETS_JSON" | jq -r '
-            ([.[] | select(.name | endswith("-all.jar"))][0]?.browser_download_url
-             // [.[] | select(.name | endswith(".jar"))][0]?.browser_download_url
-             // empty)')
+            ([.[] | select(.name | endswith("-all.jar"))]
+             + [.[] | select(.name | endswith(".jar"))])
+            | map(.browser_download_url // .url)
+            | map(select(. != null))
+            | .[0] // empty')
           if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" = "null" ]; then
             echo "::error::No .jar asset found on release $TAG"
             exit 1
