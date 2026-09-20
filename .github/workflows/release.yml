@@ -1,0 +1,114 @@
+name: Build and Release
+
+# Tagging vX.Y.Z builds the shadow jar and publishes it as a GitHub release.
+# ppm was released by hand until 0.2.3, which is why its jars had to be built
+# on someone's machine; this mirrors the release workflow the other extensions use.
+#
+# The dependency setup below is copied from ci.yml deliberately: ppm compiles
+# against qpsc, which compiles against tiles-to-pyramid, and both must be
+# published to mavenLocal at the SAME pinned tags the CI build proved. Bump the
+# refs here and in ci.yml together.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout ppm
+        uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+          cache: 'gradle'
+
+      - name: Checkout tiles-to-pyramid (transitive qpsc dep)
+        uses: actions/checkout@v4
+        with:
+          repository: uw-loci/qupath-extension-tiles-to-pyramid
+          # Pin to the tag qpsc's build.gradle.kts shadow()s (mirrors qpsc's own CI).
+          # Without a ref this checks out tiles main, which publishes a version that
+          # does NOT match the tiles-to-pyramid:X.Y.Z qpsc pins, so qpsc's build fails
+          # to resolve it. Bump this together with qpsc's tiles pin.
+          ref: v0.6.2
+          path: tiles-to-pyramid
+
+      - name: Checkout qpsc dependency
+        uses: actions/checkout@v4
+        with:
+          repository: uw-loci/qupath-extension-qpsc
+          # Pin to the qpsc release ppm depends on (build.gradle.kts
+          # shadow("...qupath-extension-qpsc:X.Y.Z")). Bump both together.
+          ref: v0.10.0
+          path: qpsc
+
+      - name: Grant execute permission for gradlew
+        if: runner.os != 'Windows'
+        run: |
+          chmod +x gradlew
+          chmod +x tiles-to-pyramid/gradlew
+          chmod +x qpsc/gradlew
+
+      - name: Publish tiles-to-pyramid to local Maven
+        run: |
+          cd tiles-to-pyramid
+          ./gradlew publishToMavenLocal
+        shell: bash
+
+      - name: Publish qpsc to local Maven
+        run: |
+          cd qpsc
+          ./gradlew publishToMavenLocal
+        shell: bash
+
+      - name: Build shadow jar
+        # shadowJar, not build alone: the released artifact must bundle the
+        # implementation dependencies that the lean jar omits.
+        run: xvfb-run ./gradlew build shadowJar
+        env:
+          DISPLAY: ':99'
+
+      - name: Find JAR file
+        id: find_jar
+        run: |
+          JAR_PATH=$(find build/libs -name "*-all.jar" | head -n 1)
+          if [ -z "$JAR_PATH" ]; then
+            echo "::error::No -all jar produced; the release would ship an unusable lean jar"
+            exit 1
+          fi
+          echo "jar_path=$JAR_PATH" >> $GITHUB_OUTPUT
+          echo "Found JAR: $JAR_PATH"
+
+      - name: Extract version from tag
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: v${{ steps.get_version.outputs.version }}
+          body: |
+            ## QuPath PPM Extension ${{ steps.get_version.outputs.version }}
+
+            PPM (polarized light) image analysis for QuPath. Requires
+            qupath-extension-qpsc and QuPath 0.7.0 or later.
+
+            See CHANGELOG.md in the repository for what changed.
+
+            ### Installation
+
+            Download the JAR below and drag it onto a running QuPath, or place
+            it in QuPath's extensions folder and restart.
+          files: ${{ steps.find_jar.outputs.jar_path }}
+          draft: false
+          prerelease: false
