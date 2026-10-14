@@ -2,20 +2,17 @@ package qupath.ext.ppm.service;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 import org.apposed.appose.Appose;
 import org.apposed.appose.Environment;
 import org.apposed.appose.Service;
 import org.apposed.appose.Service.ResponseType;
 import org.apposed.appose.Service.Task;
-import org.apposed.appose.TaskException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.common.GeneralTools;
@@ -33,6 +30,11 @@ import qupath.lib.common.GeneralTools;
  * JAR resources. First-time setup downloads Python and dependencies (~500 MB).
  * Subsequent launches reuse the cached environment.</p>
  *
+ * <p>The generic plumbing (manifest staging, pixi, worker shutdown, failure
+ * classification, the thread-death retry) lives in the shared copies
+ * {@link ApposeSupport} and {@link ApposeTaskRunner}; this class holds only
+ * what is specific to the PPM environment.</p>
+ *
  * @author Mike Nelson
  * @since 0.2.0
  */
@@ -40,6 +42,7 @@ public class ApposePPMService {
 
     private static final Logger logger = LoggerFactory.getLogger(ApposePPMService.class);
 
+    private static final String TITLE = "PPM Analysis";
     private static final String RESOURCE_BASE = "qupath/ext/ppm/";
     private static final String PIXI_TOML_RESOURCE = RESOURCE_BASE + "pixi.toml";
     // Bundled lockfile pinning the full transitive dependency tree. Installed
@@ -78,14 +81,6 @@ public class ApposePPMService {
      */
     private static final String REQUIRED_PPM_VERSION = "1.3.5";
 
-    /**
-     * Appose's failure signature for a stale worker. The worker emits this
-     * BEFORE any Python runs, then Appose relaunches the task as an
-     * unobservable zombie inside the same worker -- so recovery means
-     * restarting the worker, not simply resubmitting the task.
-     */
-    private static final String THREAD_DEATH_SIGNATURE = "thread death";
-
     private static ApposePPMService instance;
 
     private Environment environment;
@@ -105,6 +100,26 @@ public class ApposePPMService {
      */
     private String lastInstallFailure;
 
+    /** How {@link ApposeTaskRunner} reaches the worker and replaces a stale one. */
+    private final ApposeTaskRunner.WorkerSource workerSource = new ApposeTaskRunner.WorkerSource() {
+        @Override
+        public Service worker() throws IOException {
+            ensureInitialized();
+            Service service = pythonService;
+            if (service == null) {
+                // A concurrent shutdown() or restartWorker() cleared it after
+                // ensureInitialized() passed.
+                throw new IOException(TITLE + " task cannot run: the Python worker went away");
+            }
+            return service;
+        }
+
+        @Override
+        public void replaceWorker(Service stale) throws IOException {
+            restartWorker(stale);
+        }
+    };
+
     private ApposePPMService() {}
 
     /**
@@ -122,13 +137,7 @@ public class ApposePPMService {
      * Fast filesystem check -- does NOT trigger any downloads.
      */
     public static boolean isEnvironmentBuilt() {
-        ApposePPMService svc = instance;
-        if (svc != null && svc.environment != null) {
-            Path envDir = Path.of(svc.environment.base());
-            return Files.isDirectory(envDir.resolve(".pixi"));
-        }
-        Path envDir = getEnvironmentPath();
-        return Files.isDirectory(envDir.resolve(".pixi"));
+        return ApposeEnvLocation.isBuilt(getEnvironmentPath());
     }
 
     /**
@@ -189,22 +198,23 @@ public class ApposePPMService {
             return;
         }
 
+        long setupStart = System.nanoTime();
         try {
             report(statusCallback, "Loading environment configuration...");
             logger.info("Initializing PPM Appose environment...");
 
-            String pixiToml = loadResource(PIXI_TOML_RESOURCE);
-            String pixiLock = loadResource(PIXI_LOCK_RESOURCE);
+            String pixiToml = ApposeSupport.loadResource(PIXI_TOML_RESOURCE);
+            String pixiLock = ApposeSupport.loadResource(PIXI_LOCK_RESOURCE);
 
             // ALL Appose operations require the extension classloader as TCCL.
             // Appose and its dependencies use ServiceLoader internally.
             ClassLoader original = Thread.currentThread().getContextClassLoader();
-            Thread.currentThread().setContextClassLoader(ApposePPMService.class.getClassLoader());
+            Thread.currentThread().setContextClassLoader(ApposeSupport.extensionClassLoader());
 
             try {
                 // Sync manifest + lock; the lock is staged so the install below
                 // can run --frozen (exact pinned versions, no re-resolution).
-                syncManifest(pixiToml, pixiLock);
+                ApposeSupport.syncManifest(getEnvironmentPath(), pixiToml, pixiLock, logger);
 
                 report(statusCallback, "Building pixi environment (this may take several minutes)...");
 
@@ -224,9 +234,12 @@ public class ApposePPMService {
                     envBuilder.base(configuredDir.toFile());
                     logger.info("Building the environment at the configured location: {}", configuredDir);
                 }
+                long buildStart = System.nanoTime();
                 environment = envBuilder.build();
-
-                logger.info("Appose environment configured at: {}", environment.base());
+                logger.info(
+                        "Appose environment configured at {} ({} ms)",
+                        environment.base(),
+                        ApposeSupport.elapsedMs(buildStart));
 
                 // Install dependencies via pixi, then ppm-library via pip.
                 // Appose's build() with .content() only writes pixi.toml -- it does
@@ -236,22 +249,12 @@ public class ApposePPMService {
                 report(statusCallback, "Starting Python service...");
 
                 // Create Python service (lazy - subprocess starts on first task)
-                pythonService = environment.python();
-
-                // Log Python stderr at INFO level and route to console window
-                pythonService.debug(msg -> {
-                    logger.info("[PPM Python] {}", msg);
-                    qupath.ext.ppm.ui.PythonConsoleWindow.appendMessage(msg);
-                });
-
-                // Set the init script. Must prepend "import numpy" before the main
-                // init script to avoid Windows deadlock (numpy/numpy#24290).
-                String initScript = "import numpy\n" + loadScript("init_ppm.py");
-                pythonService.init(initScript);
+                pythonService = spawnWorker();
 
                 // Force Python subprocess to start and verify packages
                 report(statusCallback, "Verifying installed packages...");
                 logger.info("Running PPM environment verification task...");
+                long workerStart = System.nanoTime();
 
                 String verifyScript = "import ppm_library\n"
                         + "import scipy\n"
@@ -275,7 +278,10 @@ public class ApposePPMService {
                 }
 
                 installedPpmVersion = ppmVersion;
-                logger.info("PPM environment verified: ppm_library {}", ppmVersion);
+                logger.info(
+                        "PPM environment verified: ppm_library {}; the Python worker started in {} ms",
+                        ppmVersion,
+                        ApposeSupport.elapsedMs(workerStart));
 
                 // Check whether the installed version meets the minimum requirement.
                 // There is deliberately no retry here: installPPMLibrary() already
@@ -302,6 +308,7 @@ public class ApposePPMService {
                 logger.info("  Required ppm_library: >= {}", REQUIRED_PPM_VERSION);
                 logger.info("  Version compatible: {}", versionCompatible);
                 logger.info("  Environment path: {}", getEnvironmentPath());
+                logger.info("  Setup time: {} ms", ApposeSupport.elapsedMs(setupStart));
                 logger.info("=================================");
 
                 initialized = true;
@@ -326,18 +333,18 @@ public class ApposePPMService {
             // Match failure signatures against the full cause chain -- pixi's
             // BuildException only says "pixi build failed" at the top; the
             // actionable Windows file-lock text lives in a nested cause.
-            String fullMsg = collectCauseMessages(e);
+            String fullMsg = ApposeSupport.collectCauseMessages(e);
             initError = e.getMessage();
             initialized = false;
             logger.error("Failed to initialize PPM Appose: {}", e.getMessage(), e);
-            if (looksLikeWindowsFileLock(fullMsg)) {
+            if (ApposeSupport.looksLikeWindowsFileLock(fullMsg)) {
                 logger.warn(
                         "Pixi env install hit a Windows file lock; manual recovery required\n{}",
-                        windowsFileLockAdvice(ENV_NAME));
+                        ApposeSupport.windowsFileLockAdvice(getEnvironmentPath()));
                 report(statusCallback, "Pixi env install failed: Windows file lock. See recovery steps.");
                 try {
                     qupath.fx.dialogs.Dialogs.showWarningNotification(
-                            "PPM Analysis",
+                            TITLE,
                             "Pixi env install failed: a file was locked by another process. Close QuPath,"
                                     + " delete the .pixi folder, and relaunch. See the log for full recovery steps.");
                 } catch (Exception fxEx) {
@@ -352,19 +359,10 @@ public class ApposePPMService {
      * Runs a named task script with the given inputs, recovering once from a
      * stale Appose worker.
      *
-     * <p>A worker that has gone idle emits Appose's "thread death" FAILURE on
-     * its next task <em>before any Python runs</em>. Appose then drops that task
-     * and relaunches it inside the same worker as an unobservable zombie (every
-     * later event hits "No such task"), so a plain resubmit would run the work
-     * twice. Recovery therefore has three parts:</p>
-     * <ol>
-     *   <li>restart the worker first, which kills the zombie relaunch;</li>
-     *   <li>retry only when no Python ever ran -- every PPM script emits an
-     *       UPDATE as soon as its imports succeed, and a failure after that
-     *       point is a real failure, not a stale worker;</li>
-     *   <li>log thread death at WARN (it is transient and recovered) and every
-     *       other failure at ERROR.</li>
-     * </ol>
+     * <p>Every PPM script emits an UPDATE as soon as its imports succeed, so a
+     * "thread death" with no UPDATE seen is a stale worker and the task is
+     * retried on a fresh one; a failure after that point is a real failure.
+     * The rules are in {@link ApposeTaskRunner}.</p>
      *
      * @param scriptName script name without .py extension
      * @param inputs     map of input values passed to the script
@@ -372,83 +370,32 @@ public class ApposePPMService {
      * @throws IOException if the service is not available or the task fails
      */
     public Task runTask(String scriptName, Map<String, Object> inputs) throws IOException {
-        for (int attempt = 0; ; attempt++) {
-            ensureInitialized();
-            try {
-                return runTaskOnce(scriptName, inputs);
-            } catch (StaleWorkerException e) {
-                if (e.pythonStarted || attempt > 0) {
-                    throw e;
-                }
-                logger.warn(
-                        "PPM task '{}' hit Appose 'thread death' before any Python ran (stale worker). "
-                                + "Restarting the worker to kill the zombie relaunch, then retrying once.",
-                        scriptName);
-                try {
-                    restartWorker();
-                } catch (IOException restartError) {
-                    logger.error("Worker restart after thread death failed: {}", restartError.getMessage());
-                    throw e; // surface the original failure, not the restart's
-                }
-            }
-        }
-    }
-
-    /**
-     * Runs a task script exactly once. The retry decision lives in
-     * {@link #runTask(String, Map)}.
-     */
-    private Task runTaskOnce(String scriptName, Map<String, Object> inputs) throws IOException {
         String script;
         try {
             script = loadScript(scriptName + ".py");
         } catch (IOException e) {
             throw new IOException("Failed to load task script: " + scriptName, e);
         }
+        return ApposeTaskRunner.run(
+                "PPM", workerSource, scriptName, script, inputs, new ApposeTaskRunner.Options().maxAttempts(2));
+    }
 
-        // Set by the first UPDATE event. Every PPM script emits one as soon as
-        // its imports succeed, so "still false at failure time" means the worker
-        // died before running any of the script -- the only safe case to retry.
-        final boolean[] pythonStarted = {false};
-
-        // TCCL must be set for Groovy JSON serialization and SharedMemory/NDArray ops
-        Service service = pythonService;
-        if (service == null) {
-            // A concurrent shutdown() or restartWorker() cleared it after
-            // ensureInitialized() passed.
-            throw new IOException("PPM task '" + scriptName + "' cannot run: the Python worker went away");
-        }
-        ClassLoader original = Thread.currentThread().getContextClassLoader();
-        Thread.currentThread().setContextClassLoader(ApposePPMService.class.getClassLoader());
-        try {
-            Task task = service.task(script, inputs);
-            task.listen(event -> {
-                if (event.responseType == ResponseType.UPDATE) {
-                    pythonStarted[0] = true;
-                } else if (event.responseType == ResponseType.CRASH) {
-                    logger.error("PPM task '{}' CRASH: {}", scriptName, task.error);
-                } else if (event.responseType == ResponseType.FAILURE) {
-                    if (isThreadDeath(task.error)) {
-                        logger.warn("PPM task '{}' hit a stale Appose worker: {}", scriptName, task.error);
-                    } else {
-                        logger.error("PPM task '{}' FAILURE: {}", scriptName, task.error);
-                    }
-                }
-            });
-            task.waitFor();
-            return task;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("PPM task '" + scriptName + "' interrupted", e);
-        } catch (TaskException e) {
-            String message = "PPM task '" + scriptName + "' failed: " + e.getMessage();
-            if (isThreadDeath(e.getMessage())) {
-                throw new StaleWorkerException(message, e, pythonStarted[0]);
-            }
-            throw new IOException(message, e);
-        } finally {
-            Thread.currentThread().setContextClassLoader(original);
-        }
+    /**
+     * Creates the Python worker and queues its init script. Does NOT start the
+     * subprocess; Appose does that on the first task.
+     *
+     * <p>Caller must hold the monitor and have the extension classloader set
+     * as TCCL. {@code import numpy} must stay the literal first line of the
+     * init string to avoid a Windows deadlock (numpy/numpy#24290).
+     */
+    private Service spawnWorker() throws IOException {
+        Service fresh = environment.python();
+        fresh.debug(msg -> {
+            logger.info("[PPM Python] {}", msg);
+            qupath.ext.ppm.ui.PythonConsoleWindow.appendMessage(msg);
+        });
+        fresh.init("import numpy\n" + loadScript("init_ppm.py"));
+        return fresh;
     }
 
     /**
@@ -460,51 +407,42 @@ public class ApposePPMService {
      *                     be recreated
      */
     public synchronized void restartWorker() throws IOException {
+        restartWorker(null);
+    }
+
+    /**
+     * {@link #restartWorker()}, but a no-op when another thread already
+     * replaced the worker that {@code staleWorker} refers to, so two tasks
+     * failing on the same stale worker do not tear down each other's
+     * replacement.
+     *
+     * @param staleWorker the Service the failed task was submitted to, or
+     *                    {@code null} to restart unconditionally
+     */
+    public synchronized void restartWorker(Service staleWorker) throws IOException {
         if (environment == null) {
             throw new IOException("Cannot restart worker: Appose environment not built");
         }
+        if (staleWorker != null && pythonService != staleWorker) {
+            logger.info("PPM Python worker was already replaced by another thread; skipping redundant restart");
+            return;
+        }
         ClassLoader original = Thread.currentThread().getContextClassLoader();
-        Thread.currentThread().setContextClassLoader(ApposePPMService.class.getClassLoader());
+        Thread.currentThread().setContextClassLoader(ApposeSupport.extensionClassLoader());
         try {
-            // Tear the old worker down (close stdin for a clean exit, then kill).
+            long start = System.nanoTime();
             Service stale = pythonService;
             pythonService = null;
-            if (stale != null) {
-                try {
-                    stale.close();
-                    long deadline = System.currentTimeMillis() + 3000;
-                    while (stale.isAlive() && System.currentTimeMillis() < deadline) {
-                        Thread.sleep(50);
-                    }
-                    if (stale.isAlive()) {
-                        stale.kill();
-                    }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    stale.kill();
-                } catch (Exception e) {
-                    logger.warn("Error tearing down stale PPM worker: {}", e.getMessage());
-                    try {
-                        stale.kill();
-                    } catch (Exception ignored) {
-                        // best effort
-                    }
-                }
-            }
+            ApposeSupport.stopWorker(stale, 3000, logger);
 
-            Service fresh = environment.python();
-            fresh.debug(msg -> {
-                logger.info("[PPM Python] {}", msg);
-                qupath.ext.ppm.ui.PythonConsoleWindow.appendMessage(msg);
-            });
-            // "import numpy" first avoids a Windows deadlock (numpy/numpy#24290).
-            fresh.init("import numpy\n" + loadScript("init_ppm.py"));
+            Service fresh = spawnWorker();
             // Appose starts the subprocess lazily, and a not-yet-started worker
             // reports isAlive() == false -- which isAvailable() would read as
             // dead. Start it here so the service is honestly available on return.
             fresh.start();
             pythonService = fresh;
-            logger.info("PPM Appose worker restarted (fresh Python subprocess)");
+            logger.info(
+                    "PPM Appose worker restarted in {} ms (fresh Python subprocess)", ApposeSupport.elapsedMs(start));
         } catch (IOException e) {
             throw e;
         } catch (Exception e) {
@@ -514,59 +452,15 @@ public class ApposePPMService {
         }
     }
 
-    /** True when a task failure carries Appose's stale-worker signature. */
-    private static boolean isThreadDeath(String message) {
-        return message != null && message.toLowerCase().contains(THREAD_DEATH_SIGNATURE);
-    }
-
-    /**
-     * A task failure with Appose's "thread death" signature, carrying whether
-     * any Python ran before it -- which is what decides if a retry is safe.
-     */
-    private static class StaleWorkerException extends IOException {
-        private static final long serialVersionUID = 1L;
-
-        final boolean pythonStarted;
-
-        StaleWorkerException(String message, Throwable cause, boolean pythonStarted) {
-            super(message, cause);
-            this.pythonStarted = pythonStarted;
-        }
-    }
-
     /**
      * Gracefully shuts down the Python service.
      * Closes stdin first, then force-kills if needed after 5 seconds.
      */
     public synchronized void shutdown() {
-        if (pythonService != null) {
-            try {
-                logger.info("Shutting down PPM Python service...");
-                pythonService.close();
-
-                if (pythonService.isAlive()) {
-                    long deadline = System.currentTimeMillis() + 5000;
-                    while (pythonService.isAlive() && System.currentTimeMillis() < deadline) {
-                        try {
-                            Thread.sleep(200);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            break;
-                        }
-                    }
-                }
-                if (pythonService.isAlive()) {
-                    logger.warn("PPM Python service did not exit gracefully, force-killing");
-                    pythonService.kill();
-                }
-            } catch (Exception e) {
-                try {
-                    pythonService.kill();
-                } catch (Exception ignored) {
-                    // nothing more we can do
-                }
-                logger.warn("Error during PPM Python shutdown: {}", e.getMessage());
-            }
+        Service service = pythonService;
+        if (service != null) {
+            logger.info("Shutting down PPM Python service...");
+            ApposeSupport.stopWorker(service, 5000, logger);
             pythonService = null;
         }
         initialized = false;
@@ -600,7 +494,7 @@ public class ApposePPMService {
         Path envPath = getEnvironmentPath();
         if (Files.exists(envPath)) {
             logger.info("Deleting environment directory: {}", envPath);
-            deleteDirectoryRecursively(envPath);
+            ApposeSupport.deleteDirectoryRecursively(envPath);
             logger.info("Environment directory deleted");
         }
     }
@@ -642,13 +536,7 @@ public class ApposePPMService {
      * Executes a callable with the TCCL set to the extension's classloader.
      */
     public static <T> T withExtensionClassLoader(java.util.concurrent.Callable<T> callable) throws Exception {
-        ClassLoader original = Thread.currentThread().getContextClassLoader();
-        Thread.currentThread().setContextClassLoader(ApposePPMService.class.getClassLoader());
-        try {
-            return callable.call();
-        } finally {
-            Thread.currentThread().setContextClassLoader(original);
-        }
+        return ApposeSupport.withExtensionClassLoader(callable);
     }
 
     // ==================== Internal Helpers ====================
@@ -665,7 +553,7 @@ public class ApposePPMService {
         Path envBase = Path.of(environment.base());
         Path manifestPath = envBase.resolve("pixi.toml");
 
-        Path pixi = findPixiBinary();
+        Path pixi = ApposeSupport.findPixiBinary();
         if (pixi == null) {
             throw new IOException("Cannot find pixi binary. "
                     + "The Appose environment may not have been set up correctly. "
@@ -693,7 +581,10 @@ public class ApposePPMService {
         logger.info("Running pixi install --frozen from the bundled lock...");
         report(statusCallback, "Installing Python dependencies (this may take several minutes on first run)...");
         try {
-            runPixiCommand(pixi, envBase, manifestPath, "install", "--frozen");
+            long start = System.nanoTime();
+            ApposeSupport.runPixiCommand(
+                    pixi, envBase, manifestPath, line -> logger.info("[pixi] {}", line), "install", "--frozen");
+            logger.info("pixi install --frozen finished in {} ms", ApposeSupport.elapsedMs(start));
         } catch (IOException e) {
             recordInstallFailure("pixi install", e, alreadySatisfied, preinstalled, statusCallback);
         }
@@ -875,197 +766,14 @@ public class ApposePPMService {
         logger.info("{} installed successfully", packageLabel);
     }
 
-    /**
-     * Runs a pixi command and waits for completion.
-     */
-    private void runPixiCommand(Path pixi, Path workDir, Path manifestPath, String... args) throws IOException {
-        java.util.List<String> command = new java.util.ArrayList<>();
-        command.add(pixi.toString());
-        for (String arg : args) {
-            command.add(arg);
-        }
-        command.add("--manifest-path");
-        command.add(manifestPath.toString());
-
-        logger.info("Running: {}", command);
-        ProcessBuilder pb = new ProcessBuilder(command);
-        pb.directory(workDir.toFile());
-        pb.redirectErrorStream(true);
-        Process process = pb.start();
-
-        StringBuilder output = new StringBuilder();
-        try (BufferedReader reader =
-                new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                output.append(line).append("\n");
-                logger.info("[pixi] {}", line);
-            }
-        }
-
-        int exitCode;
-        try {
-            exitCode = process.waitFor();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("pixi command interrupted", e);
-        }
-
-        if (exitCode != 0) {
-            throw new IOException("pixi " + args[0] + " failed (exit code " + exitCode + "):\n" + output);
-        }
-    }
-
-    /**
-     * Finds the pixi binary. Checks Appose's default install location first,
-     * then falls back to system PATH.
-     */
-    private Path findPixiBinary() {
-        Path apposeDir = Path.of(System.getProperty("user.home"), ".local", "share", "appose");
-        String pixiName = GeneralTools.isWindows() ? "pixi.exe" : "pixi";
-        Path pixi = apposeDir.resolve(".pixi").resolve("bin").resolve(pixiName);
-        if (Files.isRegularFile(pixi)) return pixi;
-
-        // Check system PATH
-        try {
-            Process p = new ProcessBuilder(pixiName, "--version")
-                    .redirectErrorStream(true)
-                    .start();
-            int exit = p.waitFor();
-            if (exit == 0) {
-                return Path.of(pixiName);
-            }
-        } catch (IOException | InterruptedException ignored) {
-            // Not on PATH
-        }
-
-        return null;
-    }
-
-    /**
-     * Sync the on-disk pixi.toml AND pixi.lock with the JAR-bundled versions.
-     * The lock pins the full dependency tree and the env installs with
-     * --frozen, so the lock must be staged into the env dir before install:
-     * first run stages the lock (Appose writes the manifest); a change to
-     * either file rewrites both and wipes .pixi/ for a clean reinstall from the
-     * new lock; otherwise the lock is re-staged if a prior wipe removed it.
-     */
-    private void syncManifest(String expectedToml, String expectedLock) {
-        try {
-            Path envDir = getEnvironmentPath();
-            Path tomlFile = envDir.resolve("pixi.toml");
-            Path lockFile = envDir.resolve("pixi.lock");
-
-            if (!Files.exists(tomlFile)) {
-                Files.createDirectories(envDir);
-                Files.writeString(lockFile, expectedLock, StandardCharsets.UTF_8);
-                return;
-            }
-
-            String onToml = Files.readString(tomlFile, StandardCharsets.UTF_8)
-                    .replace("\r\n", "\n")
-                    .strip();
-            String exToml = expectedToml.replace("\r\n", "\n").strip();
-            String onLock = Files.exists(lockFile)
-                    ? Files.readString(lockFile, StandardCharsets.UTF_8)
-                            .replace("\r\n", "\n")
-                            .strip()
-                    : "";
-            String exLock = expectedLock.replace("\r\n", "\n").strip();
-
-            if (onToml.equals(exToml) && onLock.equals(exLock)) {
-                if (!Files.exists(lockFile)) {
-                    Files.writeString(lockFile, expectedLock, StandardCharsets.UTF_8);
-                }
-                return;
-            }
-
-            logger.info("pixi manifest/lock changed - updating and forcing environment rebuild");
-            Files.writeString(tomlFile, expectedToml, StandardCharsets.UTF_8);
-            Files.writeString(lockFile, expectedLock, StandardCharsets.UTF_8);
-            // Delete .pixi/ so Appose doesn't skip the build.
-            // On Windows, files may be locked -- use rename-then-delete fallback.
-            Path pixiDir = envDir.resolve(".pixi");
-            if (Files.isDirectory(pixiDir)) {
-                try {
-                    deleteDirectoryRecursively(pixiDir);
-                } catch (IOException e) {
-                    Path renamed = envDir.resolve(".pixi_old_" + System.currentTimeMillis());
-                    try {
-                        Files.move(pixiDir, renamed);
-                        logger.info("Could not delete .pixi/ (locked files), renamed to {}", renamed.getFileName());
-                    } catch (IOException e2) {
-                        logger.warn(
-                                "Could not delete or rename .pixi/ -- "
-                                        + "environment may not rebuild automatically. "
-                                        + "Use PPM > Rebuild PPM Analysis Environment to force rebuild. "
-                                        + "Error: {}",
-                                e2.getMessage());
-                    }
-                }
-            }
-            logger.info("Environment sync complete - next build will install from the bundled lock");
-        } catch (IOException e) {
-            logger.warn("Failed to sync pixi manifest/lock (will attempt build anyway): {}", e.getMessage());
-        }
-    }
-
-    private static void deleteDirectoryRecursively(Path directory) throws IOException {
-        java.nio.file.FileVisitor<Path> visitor = new java.nio.file.SimpleFileVisitor<>() {
-            @Override
-            public java.nio.file.FileVisitResult visitFile(Path file, java.nio.file.attribute.BasicFileAttributes attrs)
-                    throws IOException {
-                Files.delete(file);
-                return java.nio.file.FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public java.nio.file.FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-                if (exc != null) throw exc;
-                Files.delete(dir);
-                return java.nio.file.FileVisitResult.CONTINUE;
-            }
-        };
-        Files.walkFileTree(directory, visitor);
-    }
-
     private void registerShutdownHook() {
         if (shutdownHook != null) return;
-        shutdownHook = new Thread(
-                () -> {
-                    logger.info("JVM shutdown hook: cleaning up PPM Python subprocess");
-                    Service svc = pythonService;
-                    if (svc != null) {
-                        try {
-                            svc.close();
-                            if (svc.isAlive()) {
-                                Thread.sleep(2000);
-                            }
-                            if (svc.isAlive()) {
-                                svc.kill();
-                            }
-                        } catch (Exception e) {
-                            try {
-                                svc.kill();
-                            } catch (Exception ignored) {
-                            }
-                        }
-                    }
-                },
-                "PPMAnalysis-ShutdownHook");
-        shutdownHook.setDaemon(false);
-        Runtime.getRuntime().addShutdownHook(shutdownHook);
+        shutdownHook = ApposeSupport.registerShutdownHook("PPMAnalysis-ShutdownHook", () -> pythonService, logger);
     }
 
     private void removeShutdownHook() {
-        if (shutdownHook != null) {
-            try {
-                Runtime.getRuntime().removeShutdownHook(shutdownHook);
-            } catch (IllegalStateException e) {
-                // JVM already shutting down
-            }
-            shutdownHook = null;
-        }
+        ApposeSupport.removeShutdownHook(shutdownHook);
+        shutdownHook = null;
     }
 
     private void ensureInitialized() throws IOException {
@@ -1086,62 +794,7 @@ public class ApposePPMService {
     }
 
     String loadScript(String scriptFileName) throws IOException {
-        return loadResource(SCRIPTS_BASE + scriptFileName);
-    }
-
-    private static String loadResource(String resourcePath) throws IOException {
-        try (InputStream is = ApposePPMService.class.getClassLoader().getResourceAsStream(resourcePath)) {
-            if (is == null) {
-                throw new IOException("Resource not found: " + resourcePath);
-            }
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-                return reader.lines().collect(Collectors.joining("\n"));
-            }
-        }
-    }
-
-    /** Concatenate the message of a throwable and its entire cause chain.
-     *  pixi's BuildException only says "pixi build failed" at the top; the
-     *  actionable "failed to link ... os error 32" text lives in a nested
-     *  cause, so failure-signature detection must see the whole chain. */
-    private static String collectCauseMessages(Throwable t) {
-        StringBuilder sb = new StringBuilder();
-        int guard = 0;
-        for (Throwable c = t; c != null && guard < 20; c = c.getCause(), guard++) {
-            if (c.getMessage() != null) {
-                sb.append(c.getMessage()).append('\n');
-            }
-        }
-        return sb.toString();
-    }
-
-    /** True when the Pixi build failed because Windows held an exclusive lock
-     *  on a file the conda link step needed to replace (canonical signature:
-     *  "failed to link" + "os error 32" / "being used by another process").
-     *  Do NOT auto-wipe -- the blocking process may still be writing. */
-    private static boolean looksLikeWindowsFileLock(String message) {
-        if (message == null) return false;
-        return message.contains("failed to link")
-                && (message.contains("os error 32") || message.contains("being used by another process"));
-    }
-
-    /** Recovery instructions for the Windows file-lock failure mode during the
-     *  Pixi env install. Surfaced to the log; a short notification points here. */
-    private static String windowsFileLockAdvice(String envName) {
-        return "The Python environment could not finish building because another"
-                + " process is holding a file open inside the env directory.\n\n"
-                + "RECOVERY STEPS (Windows):\n"
-                + "  1. Close QuPath completely (File -> Quit).\n"
-                + "  2. Open Task Manager -- end any leftover java.exe or python.exe"
-                + " running under your user.\n"
-                + "  3. In PowerShell:\n"
-                + "       Remove-Item -Recurse -Force \"$env:USERPROFILE\\.local\\share\\appose\\"
-                + envName + "\\.pixi\"\n"
-                + "  4. (If step 3 fails: reboot Windows -- guaranteed to release every file handle.)\n"
-                + "  5. (Optional) Add an antivirus exclusion for"
-                + " %USERPROFILE%\\.local\\share\\appose\\ to prevent repeat occurrences.\n"
-                + "  6. Relaunch QuPath. The env will rebuild from the bundled lock and the"
-                + " link step will succeed.";
+        return ApposeSupport.loadResource(SCRIPTS_BASE + scriptFileName);
     }
 
     private static void report(Consumer<String> callback, String message) {

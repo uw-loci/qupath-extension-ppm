@@ -28,6 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.ppm.PPMPreferences;
 import qupath.ext.ppm.analysis.PPMImageSetDiscovery.PPMAnalysisSet;
+import qupath.ext.ppm.service.ApposeArrays;
 import qupath.ext.ppm.service.ApposePPMService;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
@@ -616,12 +617,12 @@ public class PPMBatchAnalysisWorkflow {
 
         try {
             BufferedImage colorRegion = colorServer.readRegion(request);
-            sumNDArray = PPMPerpendicularityWorkflow.bufferedImageToRGBNDArray(colorRegion);
+            sumNDArray = ApposeArrays.rgbUint8HWC(colorRegion);
 
             birefNDArray = readBirefNDArray(analysisSet, x, y, w, h);
 
             // Create ROI mask
-            roiNDArray = PPMPolarityPlotWorkflow.createROIMaskNDArray(roi, x, y, w, h);
+            roiNDArray = ApposeArrays.roiMaskUint8HW(roi, x, y, w, h);
 
             Map<String, Object> inputs = new HashMap<>();
             inputs.put("sum_image", sumNDArray);
@@ -692,7 +693,7 @@ public class PPMBatchAnalysisWorkflow {
 
         try {
             BufferedImage colorRegion = colorServer.readRegion(request);
-            sumNDArray = PPMPerpendicularityWorkflow.bufferedImageToRGBNDArray(colorRegion);
+            sumNDArray = ApposeArrays.rgbUint8HWC(colorRegion);
 
             birefNDArray = readBirefNDArray(analysisSet, expandedX, expandedY, expandedW, expandedH);
 
@@ -760,7 +761,7 @@ public class PPMBatchAnalysisWorkflow {
             RegionRequest birefRequest = RegionRequest.createInstance(birefServer.getPath(), 1.0, x, y, w, h);
             BufferedImage birefRegion = birefServer.readRegion(birefRequest);
             birefServer.close();
-            return PPMPerpendicularityWorkflow.bufferedImageToGray16NDArray(birefRegion);
+            return ApposeArrays.grayUint16HW(birefRegion);
         } catch (Exception e) {
             logger.error(
                     "Could not read the birefringence region for this set; collagen masking will NOT be applied "

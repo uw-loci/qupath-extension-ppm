@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.ppm.PPMPreferences;
 import qupath.ext.ppm.analysis.PPMImageSetDiscovery.PPMAnalysisSet;
+import qupath.ext.ppm.service.ApposeArrays;
 import qupath.ext.ppm.service.ApposePPMService;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
@@ -413,7 +414,7 @@ public class PPMPolarityPlotWorkflow {
 
         try {
             BufferedImage sumRegion = sumServer.readRegion(request);
-            sumNDArray = PPMPerpendicularityWorkflow.bufferedImageToRGBNDArray(sumRegion);
+            sumNDArray = ApposeArrays.rgbUint8HWC(sumRegion);
 
             if (analysisSet != null && analysisSet.hasBirefImage()) {
                 try {
@@ -423,7 +424,7 @@ public class PPMPolarityPlotWorkflow {
                     ImageServer<BufferedImage> birefServer = birefData.getServer();
                     RegionRequest birefRequest = RegionRequest.createInstance(birefServer.getPath(), 1.0, x, y, w, h);
                     BufferedImage birefRegion = birefServer.readRegion(birefRequest);
-                    birefNDArray = PPMPerpendicularityWorkflow.bufferedImageToGray16NDArray(birefRegion);
+                    birefNDArray = ApposeArrays.grayUint16HW(birefRegion);
                     birefServer.close();
                 } catch (Exception e) {
                     // Losing the biref image loses the collagen mask with it, and
@@ -438,7 +439,7 @@ public class PPMPolarityPlotWorkflow {
                 }
             }
 
-            roiNDArray = createROIMaskNDArray(roi, x, y, w, h);
+            roiNDArray = ApposeArrays.roiMaskUint8HW(roi, x, y, w, h);
 
             Map<String, Object> inputs = new HashMap<>();
             inputs.put("sum_image", sumNDArray);
@@ -504,19 +505,6 @@ public class PPMPolarityPlotWorkflow {
             double binWidthDeg = 180.0 / bins;
             ml.put(MEAS_DOMINANT_BIN, (maxBin + 0.5) * binWidthDeg);
         }
-    }
-
-    /** Creates a binary ROI mask as an NDArray (H, W) uint8. */
-    static NDArray createROIMaskNDArray(ROI roi, int offsetX, int offsetY, int width, int height) {
-        BufferedImage mask = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_GRAY);
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                if (roi.contains(offsetX + x + 0.5, offsetY + y + 0.5)) {
-                    mask.getRaster().setSample(x, y, 0, 255);
-                }
-            }
-        }
-        return PPMPerpendicularityWorkflow.bufferedImageToGrayNDArray(mask);
     }
 
     private static double getDoubleOrNaN(JsonObject obj, String key) {

@@ -45,6 +45,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.ppm.PPMPreferences;
 import qupath.ext.ppm.analysis.PPMImageSetDiscovery.PPMAnalysisSet;
+import qupath.ext.ppm.service.ApposeArrays;
 import qupath.ext.ppm.service.ApposePPMService;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
@@ -1464,7 +1465,7 @@ public class PPMPerpendicularityWorkflow {
         NDArray foregroundNDArray = null;
 
         try {
-            sumNDArray = bufferedImageToRGBNDArray(sumRegion);
+            sumNDArray = ApposeArrays.rgbUint8HWC(sumRegion);
 
             if (classifier != null) {
                 // Pixel classifier mode: thresholder runs against the biref sibling ImageData,
@@ -1473,7 +1474,7 @@ public class PPMPerpendicularityWorkflow {
                 ImageData<BufferedImage> clsData = classifierImageData != null ? classifierImageData : imageData;
                 BufferedImage maskImage =
                         generateClassifierMaskImage(clsData, classifier, expandedX, expandedY, expandedW, expandedH);
-                foregroundNDArray = bufferedImageToGrayNDArray(maskImage);
+                foregroundNDArray = ApposeArrays.grayUint8HW(maskImage);
             } else if (analysisSet != null && analysisSet.hasBirefImage()) {
                 try {
                     @SuppressWarnings("unchecked")
@@ -1483,7 +1484,7 @@ public class PPMPerpendicularityWorkflow {
                     RegionRequest birefRequest = RegionRequest.createInstance(
                             birefServer.getPath(), 1.0, expandedX, expandedY, expandedW, expandedH);
                     BufferedImage birefRegion = birefServer.readRegion(birefRequest);
-                    birefNDArray = bufferedImageToGray16NDArray(birefRegion);
+                    birefNDArray = ApposeArrays.grayUint16HW(birefRegion);
                     birefServer.close();
                 } catch (Exception e) {
                     // Dropping the biref image drops the collagen mask with it, and
@@ -1885,67 +1886,6 @@ public class PPMPerpendicularityWorkflow {
                 adjustGeoJSONCoordinates(obj.get("geometries"), dx, dy);
             }
         }
-    }
-
-    /**
-     * Converts an RGB BufferedImage to an Appose NDArray (H, W, 3) uint8.
-     */
-    static NDArray bufferedImageToRGBNDArray(BufferedImage img) {
-        int h = img.getHeight();
-        int w = img.getWidth();
-        NDArray.Shape shape = new NDArray.Shape(NDArray.Shape.Order.C_ORDER, h, w, 3);
-        NDArray ndArray = new NDArray(NDArray.DType.UINT8, shape);
-        java.nio.ByteBuffer buf = ndArray.buffer();
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                int pixel = img.getRGB(x, y);
-                buf.put((byte) ((pixel >> 16) & 0xFF));
-                buf.put((byte) ((pixel >> 8) & 0xFF));
-                buf.put((byte) (pixel & 0xFF));
-            }
-        }
-        buf.flip();
-        return ndArray;
-    }
-
-    /**
-     * Converts a grayscale BufferedImage to an Appose NDArray (H, W) uint8.
-     * Suitable for binary masks and 8-bit grayscale images.
-     */
-    static NDArray bufferedImageToGrayNDArray(BufferedImage img) {
-        int h = img.getHeight();
-        int w = img.getWidth();
-        NDArray.Shape shape = new NDArray.Shape(NDArray.Shape.Order.C_ORDER, h, w);
-        NDArray ndArray = new NDArray(NDArray.DType.UINT8, shape);
-        java.nio.ByteBuffer buf = ndArray.buffer();
-        Raster raster = img.getRaster();
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                buf.put((byte) raster.getSample(x, y, 0));
-            }
-        }
-        buf.flip();
-        return ndArray;
-    }
-
-    /**
-     * Converts a grayscale BufferedImage to an Appose NDArray (H, W) uint16.
-     * Required for 16-bit images such as birefringence data where values exceed 255.
-     */
-    static NDArray bufferedImageToGray16NDArray(BufferedImage img) {
-        int h = img.getHeight();
-        int w = img.getWidth();
-        NDArray.Shape shape = new NDArray.Shape(NDArray.Shape.Order.C_ORDER, h, w);
-        NDArray ndArray = new NDArray(NDArray.DType.UINT16, shape);
-        java.nio.ShortBuffer buf =
-                ndArray.buffer().order(java.nio.ByteOrder.LITTLE_ENDIAN).asShortBuffer();
-        Raster raster = img.getRaster();
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                buf.put((short) raster.getSample(x, y, 0));
-            }
-        }
-        return ndArray;
     }
 
     /**
