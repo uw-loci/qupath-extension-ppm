@@ -13,7 +13,7 @@ plugins {
 qupathExtension {
     name = "qupath-extension-ppm"
     group = "io.github.uw-loci"
-    version = "0.2.3"
+    version = "0.2.4"
     description = "Polarized light microscopy (PPM) modality extension for QuPath/QPSC"
     automaticModule = "io.github.uw.loci.extension.ppm"
 }
