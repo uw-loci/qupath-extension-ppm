@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The Python worker no longer picks up packages and libraries from outside its environment.**
+  A `pip install --user` package in `~/.local`, a `PYTHONPATH` or `PYTHONHOME` QuPath was started
+  with, and `LD_LIBRARY_PATH` folders added by a QuPath launch script reached the worker ahead of
+  the locked packages. The worker now starts with user site-packages off, `PYTHONPATH`/`PYTHONHOME`
+  empty, and on Linux `LD_LIBRARY_PATH` set to the environment's own `lib` folder plus any folder
+  holding the NVIDIA driver. What was not passed on is named in the QuPath log.
+
 ## [0.2.4] - 2026-10-21
 
 ### Changed

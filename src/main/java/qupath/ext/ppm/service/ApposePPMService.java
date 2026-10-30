@@ -389,7 +389,7 @@ public class ApposePPMService {
      * init string to avoid a Windows deadlock (numpy/numpy#24290).
      */
     private Service spawnWorker() throws IOException {
-        Service fresh = environment.python();
+        Service fresh = ApposeGpu.forWorker(environment).python();
         fresh.debug(msg -> {
             logger.info("[PPM Python] {}", msg);
             qupath.ext.ppm.ui.PythonConsoleWindow.appendMessage(msg);
