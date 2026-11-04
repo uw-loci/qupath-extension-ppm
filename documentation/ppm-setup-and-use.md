@@ -88,8 +88,9 @@ See: [PPM Rotation Sensitivity Test](ppm-sensitivity-test.md)
 **Menu:** Scope > PPM > PPM Reference Slide...
 
 Creates a hue-to-angle calibration from a sunburst (radial spoke) reference slide. It
-samples HSV hue along radial lines and fits `angle = slope * hue + intercept`, saving a
-`.npz` calibration file. **Every PPM analysis workflow requires this `.npz`.** Run it after
+measures the axis and the hue of each spoke and builds a hue-to-angle table through
+those spokes, saving a `.npz` calibration file. A straight line
+(`angle = slope * hue + intercept`) is saved too, for display colormaps. **Every PPM analysis workflow requires this `.npz`.** Run it after
 Polarizer Calibration (and, ideally, Birefringence Optimization).
 
 > Avoid pixel saturation when capturing the reference slide -- clipped pixels have corrupted

@@ -55,7 +55,7 @@ Analysis menus appear under **Extensions > PPM Analysis** and run on any worksta
 | **Polarizer Calibration** | Set up the microscope so fiber colors map correctly to fiber angles -- the foundation step before any quantitative orientation analysis (polarizer rotation stage calibration) | [docs](documentation/polarizer-calibration.md) |
 | **PPM Rotation Sensitivity Test** | Check how much small mechanical errors in the rotation stage affect your measurements -- a quality-control step for the optical setup (angular deviation analysis) | [docs](documentation/ppm-sensitivity-test.md) |
 | **PPM Birefringence Optimization** | Find the polarizer setting that gives the strongest, cleanest fiber signal for your sample type, so faint structures stay visible (paired-angle contrast search) | [docs](documentation/ppm-birefringence-optimization.md) |
-| **PPM Reference Slide (Sunburst)** | Build the color-to-angle lookup from a known radial test pattern, so hues in your tissue images can be read as real fiber directions in degrees (hue-to-angle calibration via linear regression) | [docs](documentation/ppm-reference-slide.md) |
+| **PPM Reference Slide (Sunburst)** | Build the color-to-angle lookup from a known radial test pattern, so hues in your tissue images can be read as real fiber directions in degrees (hue-to-angle calibration measured from the spokes) | [docs](documentation/ppm-reference-slide.md) |
 
 ### Analysis Workflows (in this extension, no microscope needed)
 
@@ -201,7 +201,7 @@ The birefringence signal is computed from the difference between +theta and -the
 ### Python Integration
 
 The analysis workflows call [ppm_library](https://github.com/uw-loci/ppm_library) (Python) for computationally intensive operations:
-- **Radial calibration** -- Sunburst spoke detection and linear regression
+- **Radial calibration** -- Sunburst spoke detection and hue-to-angle table fitting
 - **Birefringence computation** -- Multi-angle difference imaging
 - **Circular statistics** -- Mean direction, circular standard deviation, resultant length
 - **Surface analysis** -- Boundary normal computation and perpendicularity scoring
