@@ -17,17 +17,23 @@ import org.slf4j.LoggerFactory;
 /**
  * Java-side reader for PPM sunburst calibration files (.npz).
  *
- * <p>The calibration file is produced by ppm_library's RadialCalibrator and contains
- * a linear regression mapping hue values to fiber orientation angles. The transform is:
+ * <p>The calibration file is produced by ppm_library's RadialCalibrator. The hue is first
+ * shifted, then mapped to an angle:
  * <pre>
  *   hue_shifted = (hue_raw - hue_offset) % 1.0
- *   angle = inv_slope * hue_shifted + inv_intercept
+ *   angle = lut_angle interpolated at hue_shifted * (len(lut_angle) - 1)   (when present)
+ *   angle = inv_slope * hue_shifted + inv_intercept                         (otherwise)
  *   angle = angle % 180
  * </pre>
  *
- * <p>This class reads the .npz file (a zip of numpy .npy arrays) and extracts the
- * three coefficients needed for the hue-to-angle conversion, making it possible to
- * compute fiber angles entirely in Java without Python.</p>
+ * <p>{@code lut_angle} is a table through the measured spokes of the reference slide;
+ * the hue does not change at a constant rate with angle, so the straight line alone is
+ * several degrees off between some spokes. Files written before the table existed have
+ * only the straight line, and are read with it.</p>
+ *
+ * <p>This class reads the .npz file (a zip of numpy .npy arrays), making it possible to
+ * compute fiber angles entirely in Java without Python. It must give the same angles as
+ * {@code RadialCalibrationResult.hue_to_angle} in ppm_library.</p>
  *
  * @author Mike Nelson
  * @since 1.0
@@ -43,13 +49,23 @@ public class PPMCalibration {
     private final double invIntercept;
     private final double hueOffset;
     private final double rSquared;
+    /** Angle at shifted hue i / (length - 1), not wrapped; null when the file has no table. */
+    private final double[] lutAngle;
+
     private final Path sourcePath;
 
-    private PPMCalibration(double invSlope, double invIntercept, double hueOffset, double rSquared, Path sourcePath) {
+    PPMCalibration(
+            double invSlope,
+            double invIntercept,
+            double hueOffset,
+            double rSquared,
+            double[] lutAngle,
+            Path sourcePath) {
         this.invSlope = invSlope;
         this.invIntercept = invIntercept;
         this.hueOffset = hueOffset;
         this.rSquared = rSquared;
+        this.lutAngle = lutAngle != null && lutAngle.length >= 2 ? lutAngle.clone() : null;
         this.sourcePath = sourcePath;
     }
 
@@ -65,17 +81,17 @@ public class PPMCalibration {
             throw new IOException("Calibration file not found: " + path);
         }
 
-        Map<String, double[]> arrays = readNpzScalars(path);
+        Map<String, double[]> arrays = readNpzArrays(path);
 
         double invSlope = getScalar(arrays, "inv_slope");
         double invIntercept = getScalar(arrays, "inv_intercept");
         double hueOffset = getScalar(arrays, "hue_offset");
         double rSquared = getScalar(arrays, "r_squared");
+        double[] lutAngle = arrays.get("lut_angle");
 
-        PPMCalibration cal = new PPMCalibration(invSlope, invIntercept, hueOffset, rSquared, path);
+        PPMCalibration cal = new PPMCalibration(invSlope, invIntercept, hueOffset, rSquared, lutAngle, path);
 
-        logger.info("Loaded PPM calibration from %s: angle = %.4f * hue_shifted + %.4f, hue_offset=%.4f, R2=%.4f"
-                .formatted(path.getFileName(), invSlope, invIntercept, hueOffset, rSquared));
+        logger.info("Loaded PPM calibration from {}: {}", path.getFileName(), cal.describeMapping());
 
         return cal;
     }
@@ -99,8 +115,17 @@ public class PPMCalibration {
      */
     public double hueToAngle(double hue) {
         double hueShifted = ((hue - hueOffset) % 1.0 + 1.0) % 1.0;
-        double angle = invSlope * hueShifted + invIntercept;
-        return ((angle % 180.0) + 180.0) % 180.0;
+        return ((shiftedHueToAngle(hueShifted) % 180.0) + 180.0) % 180.0;
+    }
+
+    private double shiftedHueToAngle(double hueShifted) {
+        if (lutAngle == null) {
+            return invSlope * hueShifted + invIntercept;
+        }
+        double pos = hueShifted * (lutAngle.length - 1);
+        int i = Math.min((int) pos, lutAngle.length - 2);
+        double frac = pos - i;
+        return lutAngle[i] + frac * (lutAngle[i + 1] - lutAngle[i]);
     }
 
     /**
@@ -112,9 +137,7 @@ public class PPMCalibration {
      */
     public void hueToAngle(float[] hues, float[] angles) {
         for (int i = 0; i < hues.length; i++) {
-            double hueShifted = ((hues[i] - hueOffset) % 1.0 + 1.0) % 1.0;
-            double angle = invSlope * hueShifted + invIntercept;
-            angles[i] = (float) (((angle % 180.0) + 180.0) % 180.0);
+            angles[i] = (float) hueToAngle(hues[i]);
         }
     }
 
@@ -126,10 +149,32 @@ public class PPMCalibration {
      * @return expected hue value (0.0 to 1.0)
      */
     public double angleToHue(double angle) {
-        // slope and intercept are the forward transform: hue_shifted = slope * angle + intercept
-        // We need to invert inv_slope/inv_intercept: hue_shifted = (angle - inv_intercept) / inv_slope
-        double hueShifted = (angle - invIntercept) / invSlope;
+        double hueShifted = lutAngle != null ? tableAngleToShiftedHue(angle) : (angle - invIntercept) / invSlope;
         return ((hueShifted + hueOffset) % 1.0 + 1.0) % 1.0;
+    }
+
+    /** Inverts the table: the table is monotonic and spans exactly one half turn. */
+    private double tableAngleToShiftedHue(double angle) {
+        int n = lutAngle.length;
+        boolean rising = lutAngle[n - 1] > lutAngle[0];
+        double low = Math.min(lutAngle[0], lutAngle[n - 1]);
+        double a = low + (((angle - low) % 180.0) + 180.0) % 180.0;
+        // Binary search for the segment holding a
+        int lo = 0;
+        int hi = n - 1;
+        while (hi - lo > 1) {
+            int mid = (lo + hi) >>> 1;
+            boolean below = rising ? lutAngle[mid] <= a : lutAngle[mid] >= a;
+            if (below) {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        double span = lutAngle[hi] - lutAngle[lo];
+        double frac = span == 0 ? 0.0 : (a - lutAngle[lo]) / span;
+        frac = Math.max(0.0, Math.min(1.0, frac));
+        return (lo + frac) / (n - 1);
     }
 
     public double getInvSlope() {
@@ -148,6 +193,18 @@ public class PPMCalibration {
         return rSquared;
     }
 
+    /** Whether hue is mapped through the spoke table (false: the straight line). */
+    public boolean hasAngleTable() {
+        return lutAngle != null;
+    }
+
+    private String describeMapping() {
+        String mapping = lutAngle != null
+                ? "hue-to-angle table (%d entries)".formatted(lutAngle.length)
+                : "angle = %.4f * hue_shifted + %.4f".formatted(invSlope, invIntercept);
+        return "%s, hue_offset=%.4f, straight-line R2=%.4f".formatted(mapping, hueOffset, rSquared);
+    }
+
     public Path getSourcePath() {
         return sourcePath;
     }
@@ -155,8 +212,8 @@ public class PPMCalibration {
     @Override
     public String toString() {
         return String.format(
-                "PPMCalibration[angle = %.4f * hue_shifted + %.4f, hue_offset=%.4f, R2=%.4f, source=%s]",
-                invSlope, invIntercept, hueOffset, rSquared, sourcePath != null ? sourcePath.getFileName() : "none");
+                "PPMCalibration[%s, source=%s]",
+                describeMapping(), sourcePath != null ? sourcePath.getFileName() : "none");
     }
 
     // ========================================================================
@@ -164,10 +221,10 @@ public class PPMCalibration {
     // ========================================================================
 
     /**
-     * Reads scalar float64 values from a .npz file.
-     * Only extracts entries that are scalar (0-d) or 1-element arrays.
+     * Reads the numeric arrays (scalar or 1-D float64, float32 or int64) from a .npz file.
+     * Entries of any other type are skipped.
      */
-    private static Map<String, double[]> readNpzScalars(Path npzPath) throws IOException {
+    private static Map<String, double[]> readNpzArrays(Path npzPath) throws IOException {
         Map<String, double[]> result = new HashMap<>();
 
         try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(npzPath))) {

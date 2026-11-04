@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Hue-to-angle uses the spoke table from the reference-slide calibration.** Calibration
+  files written by ppm_library after 2026-11-04 carry `lut_angle`, a table through the measured
+  spokes; `PPMCalibration.hueToAngle` and `angleToHue` interpolate it, matching ppm_library's
+  `hue_to_angle` to 1e-6 deg. The straight line was 2 to 3.5 deg RMS off on the PPM rig's
+  sunburst images. Older files, with no table, still use the straight line. The log line on
+  loading says which is in use.
 - **The Python worker no longer picks up packages and libraries from outside its environment.**
   A `pip install --user` package in `~/.local`, a `PYTHONPATH` or `PYTHONHOME` QuPath was started
   with, and `LD_LIBRARY_PATH` folders added by a QuPath launch script reached the worker ahead of
