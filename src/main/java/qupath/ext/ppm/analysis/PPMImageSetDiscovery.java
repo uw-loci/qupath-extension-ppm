@@ -2,6 +2,7 @@ package qupath.ext.ppm.analysis;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,7 +95,7 @@ public class PPMImageSetDiscovery {
             if (!Objects.equals(annotationName, candAnnotation)) continue;
 
             String modality = candidate.getMetadata().get(ImageMetadataManager.MODALITY);
-            if (modality == null || !modality.toLowerCase().startsWith("ppm")) continue;
+            if (modality == null || !modality.toLowerCase(Locale.ROOT).startsWith("ppm")) continue;
 
             siblings.add(candidate);
         }
@@ -106,7 +107,7 @@ public class PPMImageSetDiscovery {
 
         for (ProjectImageEntry<?> sibling : siblings) {
             String angle = sibling.getMetadata().get(ImageMetadataManager.ANGLE);
-            String imageName = sibling.getImageName().toLowerCase();
+            String imageName = sibling.getImageName().toLowerCase(Locale.ROOT);
 
             String siblingCalib = ImageMetadataManager.getPPMCalibration(sibling);
             if (siblingCalib != null && calibrationPath == null) {
@@ -133,13 +134,13 @@ public class PPMImageSetDiscovery {
         return new PPMAnalysisSet(sumImage, birefImage, angleImages, calibrationPath);
     }
 
-    private static boolean isBirefImage(String angle, String imageName) {
-        if (angle != null && angle.toLowerCase().contains("biref")) return true;
+    static boolean isBirefImage(String angle, String imageName) {
+        if (angle != null && angle.toLowerCase(Locale.ROOT).contains("biref")) return true;
         return imageName.contains("biref");
     }
 
-    private static boolean isSumImage(String angle, String imageName) {
-        if (angle != null && angle.toLowerCase().contains("sum")) return true;
+    static boolean isSumImage(String angle, String imageName) {
+        if (angle != null && angle.toLowerCase(Locale.ROOT).contains("sum")) return true;
         return imageName.contains("_sum");
     }
 }

@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -146,8 +147,8 @@ public class PPMPolarityPlotWorkflow {
         if (currentEntry != null) {
             String angle = currentEntry.getMetadata().get("angle");
             String imageName = currentEntry.getImageName();
-            boolean isBiref = (angle != null && angle.toLowerCase().contains("biref"))
-                    || (imageName != null && imageName.toLowerCase().contains("biref"));
+            boolean isBiref = (angle != null && angle.toLowerCase(Locale.ROOT).contains("biref"))
+                    || (imageName != null && imageName.toLowerCase(Locale.ROOT).contains("biref"));
             if (isBiref) {
                 PPMAnalysisSet analysisSetCheck =
                         project != null ? PPMImageSetDiscovery.findPPMAnalysisSet(currentEntry, project) : null;

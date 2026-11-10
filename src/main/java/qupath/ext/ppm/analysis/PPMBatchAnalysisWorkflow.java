@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -135,7 +136,7 @@ public class PPMBatchAnalysisWorkflow {
 
         for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
             String modality = entry.getMetadata().get(ImageMetadataManager.MODALITY);
-            if (modality == null || !modality.toLowerCase().startsWith("ppm")) continue;
+            if (modality == null || !modality.toLowerCase(Locale.ROOT).startsWith("ppm")) continue;
 
             int collection = ImageMetadataManager.getImageCollection(entry);
             if (collection < 0) continue;
@@ -159,7 +160,7 @@ public class PPMBatchAnalysisWorkflow {
 
             for (ProjectImageEntry<BufferedImage> member : members) {
                 String angle = member.getMetadata().get(ImageMetadataManager.ANGLE);
-                String name = member.getImageName().toLowerCase();
+                String name = member.getImageName().toLowerCase(Locale.ROOT);
 
                 if (isBirefImage(angle, name)) {
                     hasBiref = true;
@@ -792,7 +793,7 @@ public class PPMBatchAnalysisWorkflow {
     }
 
     private static boolean isBirefImage(String angle, String imageName) {
-        if (angle != null && angle.toLowerCase().contains("biref")) return true;
+        if (angle != null && angle.toLowerCase(Locale.ROOT).contains("biref")) return true;
         return imageName != null && imageName.contains("biref");
     }
 }
