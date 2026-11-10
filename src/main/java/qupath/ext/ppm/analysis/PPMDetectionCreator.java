@@ -5,6 +5,7 @@ import java.awt.image.BufferedImage;
 import java.awt.image.WritableRaster;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.GeometryCollection;
 import org.locationtech.jts.geom.GeometryFactory;
@@ -158,7 +159,7 @@ public class PPMDetectionCreator {
         }
 
         // Create detection objects from individual polygons
-        String className = String.format("PPM %.0f-%.0f", angleLow, angleHigh);
+        String className = String.format(Locale.ROOT, "PPM %.0f-%.0f", angleLow, angleHigh);
         PathClass pathClass = PathClass.fromString(className);
 
         // Minimum area in pixel units at full resolution

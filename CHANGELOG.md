@@ -22,6 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty, and on Linux `LD_LIBRARY_PATH` set to the environment's own `lib` folder plus any folder
   holding the NVIDIA driver. What was not passed on is named in the QuPath log.
 
+### Fixed
+
+- **Works when QuPath's language or number format is Turkish, German, French or another
+  non-English locale.** With QuPath's language set to Turkish, an image whose angle tag or name
+  read `BIREF` lowered to a dotless i and was not found as the analysis set's birefringence image.
+  Every case conversion now uses `Locale.ROOT`. Hue-range detection class names (`PPM 0-30`),
+  the per-annotation output folders and back-propagated annotation names no longer take local
+  digits.
+
 ## [0.2.4] - 2026-10-21
 
 ### Changed

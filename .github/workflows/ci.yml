@@ -76,3 +76,58 @@ jobs:
       - name: Build and test (Windows)
         if: runner.os == 'Windows'
         run: ./gradlew build
+
+  # Runs the unit tests with a Turkish default locale, which has both a dotless i
+  # (toLowerCase/toUpperCase without Locale.ROOT) and a decimal comma
+  # (String.format without a locale), so a locale bug fails a test here.
+  test-turkish-locale:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout ppm
+        uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+          cache: 'gradle'
+
+      - name: Checkout tiles-to-pyramid (transitive qpsc dep)
+        uses: actions/checkout@v4
+        with:
+          repository: uw-loci/qupath-extension-tiles-to-pyramid
+          # Same pin as the build job; bump both together.
+          ref: v0.7.1
+          path: tiles-to-pyramid
+
+      - name: Checkout qpsc dependency
+        uses: actions/checkout@v4
+        with:
+          repository: uw-loci/qupath-extension-qpsc
+          # Same pin as the build job; bump both together.
+          ref: v0.11.0
+          path: qpsc
+
+      - name: Grant execute permission for gradlew
+        run: |
+          chmod +x gradlew
+          chmod +x tiles-to-pyramid/gradlew
+          chmod +x qpsc/gradlew
+
+      - name: Publish tiles-to-pyramid to local Maven
+        run: |
+          cd tiles-to-pyramid
+          ./gradlew publishToMavenLocal
+
+      - name: Publish qpsc to local Maven
+        run: |
+          cd qpsc
+          ./gradlew publishToMavenLocal
+
+      - name: Test (Turkish locale)
+        run: xvfb-run ./gradlew test
+        env:
+          DISPLAY: ':99'
+          JAVA_TOOL_OPTIONS: -Duser.language=tr -Duser.country=TR

@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -199,8 +200,8 @@ public class PPMPerpendicularityWorkflow {
         if (currentEntry != null) {
             String angle = currentEntry.getMetadata().get("angle");
             String imageName = currentEntry.getImageName();
-            boolean isBiref = (angle != null && angle.toLowerCase().contains("biref"))
-                    || (imageName != null && imageName.toLowerCase().contains("biref"));
+            boolean isBiref = (angle != null && angle.toLowerCase(Locale.ROOT).contains("biref"))
+                    || (imageName != null && imageName.toLowerCase(Locale.ROOT).contains("biref"));
 
             if (isBiref) {
                 // Try to identify an angle image for the user
@@ -1160,8 +1161,8 @@ public class PPMPerpendicularityWorkflow {
                         String safeAnnotationName =
                                 annotationName == null ? "" : annotationName.replaceAll("[^a-zA-Z0-9._-]", "_");
                         String annotationDirName = safeAnnotationName.isEmpty()
-                                ? String.format("annotation_%02d", annotationIndex)
-                                : String.format("annotation_%02d_%s", annotationIndex, safeAnnotationName);
+                                ? String.format(Locale.ROOT, "annotation_%02d", annotationIndex)
+                                : String.format(Locale.ROOT, "annotation_%02d_%s", annotationIndex, safeAnnotationName);
                         Path annotationOutputDir = outputDir.resolve(annotationDirName);
 
                         AnnotationResult annResult = computeForAnnotation(
@@ -1998,7 +1999,7 @@ public class PPMPerpendicularityWorkflow {
             if (base == null || base.isEmpty()) return null;
 
             org.locationtech.jts.geom.Geometry ringGeom;
-            String mode = zoneMode == null ? "outside" : zoneMode.toLowerCase();
+            String mode = zoneMode == null ? "outside" : zoneMode.toLowerCase(Locale.ROOT);
             switch (mode) {
                 case "inside" -> {
                     org.locationtech.jts.geom.Geometry inner = base.buffer(-dilationPx);

@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -438,7 +439,7 @@ public class PPMBackPropagationWorkflow {
                         } else {
                             double cx = obj.getROI().getCentroidX();
                             double cy = obj.getROI().getCentroidY();
-                            obj.setName(String.format("%s: (%.0f, %.0f)", fAnnotationName, cx, cy));
+                            obj.setName(String.format(Locale.ROOT, "%s: (%.0f, %.0f)", fAnnotationName, cx, cy));
                         }
                         if (lockAnnotations) {
                             obj.setLocked(true);
