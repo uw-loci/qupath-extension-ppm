@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Python worker runs in UTF-8 mode on every host.** It starts with `PYTHONUTF8=1` (unless
+  QuPath was started with `PYTHONUTF8` set), so on Windows files it reads or writes without an
+  explicit encoding, paths and its error output use UTF-8 like the Linux and macOS workers,
+  instead of the ANSI code page. Shared Appose plumbing; the same change is in QP-CAT, the DL
+  Pixel Classifier, cellAPpose and Fiber Analysis.
+
 ## [0.2.5] - 2026-11-10
 
 ### Changed
